@@ -1,0 +1,19 @@
+[X] Tonewheels
+    [ ] Compression curve for multiple keys
+    [ ] Crosstalk/leakage
+[X] Drawbars
+[X] Chorus/Vibrato
+[X] Percussion
+    [X] Soft
+    [X] Fast
+    [X] Third
+[ ] Soft
+[ ] Leslie
+    [ ] Two vibratos
+    [ ] Two tremolos
+    [ ] Inertia model
+    [X] Drive/distortion
+    [ ] Stop
+    [ ] Room model
+[ ] Second manual
+[ ] Pyrotechnics
