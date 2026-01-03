@@ -184,7 +184,7 @@ int32_t isin_S3(int32_t x) {
 /// @param x    Angle (with 2^15 units/circle)
 /// @return     Sine value (Q12)
 int32_t isin_S4(int32_t x) {
-    int c, x2, y;
+    int c, y;
     static const int qN = 13, qA = 12, B = 19900, C = 3516;
 
     c = x << (30 - qN); // Semi-circle info into carry.

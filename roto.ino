@@ -1,5 +1,3 @@
-/* Copyright (c) 2018 Peter Teichman */
-
 #include <Audio.h>
 #include <Wire.h>
 #include <SPI.h>
@@ -11,8 +9,10 @@
 #include "preamp_audio.h"
 #include "tonewheel_osc_audio.h"
 #include "vibrato_audio.h"
+#include "keybed.h"
+#include "drawbars.h"
 
-// Hammond B-3.
+#pragma region Audio Connections
 AudioMixer4 organOut;
 TonewheelOsc tonewheels;
 Monitor tonewheelsMonitor;
@@ -37,41 +37,21 @@ AudioConnection patchCord5(organOut, 0, swell, 0);
 AudioFilterBiquad antialias;
 AudioConnection patchCord6(swell, 0, antialias, 0);
 
-// Leslie 122
-Preamp preamp;
-AudioFilterStateVariable crossover;
-AmFm leslieBassR;
-AmFm leslieTrebleR;
-AudioMixer4 leslieR;
-AmFm leslieBassL;
-AmFm leslieTrebleL;
-AudioMixer4 leslieL;
-
-AudioConnection patchCord7(antialias, 0, preamp, 0);
-AudioConnection patchCord8(preamp, 0, crossover, 0);
-
-AudioConnection patchCord9(crossover, 0, leslieBassR, 0);
-AudioConnection patchCord10(crossover, 2, leslieTrebleR, 0);
-AudioConnection patchCord11(leslieBassR, 0, leslieR, 0);
-AudioConnection patchCord12(leslieTrebleR, 0, leslieR, 1);
-
-AudioConnection patchCord13(crossover, 0, leslieBassL, 0);
-AudioConnection patchCord14(crossover, 2, leslieTrebleL, 0);
-AudioConnection patchCord15(leslieBassL, 0, leslieL, 0);
-AudioConnection patchCord16(leslieTrebleL, 0, leslieL, 1);
-
-// Teensy audio board output.
-AudioOutputI2S i2s1;
-AudioControlSGTL5000 audioShield;
-AudioConnection patchCord17(leslieR, 0, i2s1, 0);
-AudioConnection patchCord18(leslieL, 0, i2s1, 1);
+// Teensy DAC output
+AudioOutputAnalog dac;
+AudioConnection patchCord7(antialias, 0, dac, 0);
+#pragma endregion
 
 #ifdef AUDIO_INTERFACE
-// If the board is configured for USB audio, mirror the i2s output to USB.
+// If the board is configured for USB audio, mirror the dac output to USB.
 AudioOutputUSB usbAudio;
-AudioConnection patchCord19(leslieR, 0, usbAudio, 0);
-AudioConnection patchCord20(leslieL, 0, usbAudio, 1);
+AudioConnection patchCord8(antialias, 0, usbAudio, 0);
+AudioConnection patchCord9(antialias, 0, usbAudio, 1);
 #endif
+
+Keybed upperKeybed;
+Keybed lowerKeybed;
+Drawbars drawbars;
 
 // MIDI state. keys[n] will be nonzero if a key is down (value being
 // the most recent velocity). control[n] is the most recent value of a
@@ -82,6 +62,8 @@ AudioConnection patchCord20(leslieL, 0, usbAudio, 1);
 // initialization.
 uint8_t midiKeys[127] = {0};
 uint8_t midiControl[127] = {0};
+// TODO: use midi keys & midi data struct
+
 
 #define MANUAL_KEY_0 (35)
 #define MANUAL_KEY_61 (MANUAL_KEY_0 + 61)
@@ -100,6 +82,10 @@ uint8_t midiControl[127] = {0};
 #define CC_VIBRATO (107)
 #define CC_SPEAKER_DRIVE (111)
 
+// Teensy input/outputs
+#define TEENSY_LESLIE_STOP (0)
+#define TEENSY_LESLIE_SPEED (0)
+
 // numKeysDown is used to keep the percussion effect single triggered:
 // only the first key down affects the percussion setting.
 uint8_t numKeysDown = 0;
@@ -108,128 +94,27 @@ void handleNoteOn(byte chan, byte note, byte vel);
 void handleNoteOff(byte chan, byte note, byte vel);
 void handleControlChange(byte chan, byte ctrl, byte val);
 
-// reset restores everything to just-booted state:
+// init restores everything to just-booted state:
 // 1) it thinks all keys are up
 // 2) drawbar registration is set to 888800000
 // 3) percussion is off, vibrato is set to C1
 // 4) the Leslie is set to slow
-void reset() {
+void init() {
     // Release all keys and reset all control settings.
     memset(midiKeys, 0, 127);
     memset(midiControl, 0, 127);
 
-    // Set drawbars to Green Onions.
-    midiControl[CC_DRAWBAR_0 + 1] = 127;
-    midiControl[CC_DRAWBAR_0 + 2] = 127;
-    midiControl[CC_DRAWBAR_0 + 3] = 127;
-    midiControl[CC_DRAWBAR_0 + 4] = 127;
-
+    // Poll and set all drawbars
+    for (int i = 1; i <= 9; i++) {
+        midiControl[CC_DRAWBAR_0 + i] = random(0, 127);
+    }
     // Minimal drive by default.
     midiControl[CC_SPEAKER_DRIVE] = 0;
 
-    // Reset Leslie rotation position. Our R microphone leads the L by
-    // 90 degrees.
-    leslieBassL.setPhase(0);
-    leslieTrebleL.setPhase(0);
-    leslieBassR.setPhase(0.25);
-    leslieTrebleR.setPhase(0.25);
-
-    updateLeslieAmplifier();
-    updateLeslieRotation();
     updatePercussionEnvelope();
     updateTonewheelVolumes();
     updateVibrato();
-}
 
-enum {
-    NO_TONEWHEEL,
-    ONE_TONEWHEEL,
-    ALL_DRAWBARS,
-    PERCUSSION,
-    VIBRATO,
-    LESLIE,
-    LESLIE_FAST_GROWL,
-    FULL_POLYPHONY,
-};
-
-void preset(int conf) {
-    reset();
-
-    switch (conf) {
-    case NO_TONEWHEEL:
-        midiControl[CC_DRAWBAR_0 + 1] = 0;
-        midiControl[CC_DRAWBAR_0 + 2] = 0;
-        midiControl[CC_DRAWBAR_0 + 3] = 0;
-        midiControl[CC_DRAWBAR_0 + 4] = 0;
-        midiControl[CC_DRAWBAR_0 + 5] = 0;
-        midiControl[CC_DRAWBAR_0 + 6] = 0;
-        midiControl[CC_DRAWBAR_0 + 7] = 0;
-        midiControl[CC_DRAWBAR_0 + 8] = 0;
-        midiControl[CC_DRAWBAR_0 + 9] = 0;
-        midiControl[CC_ROTARY_SPEED] = 0;
-        break;
-    case ONE_TONEWHEEL:
-        midiControl[CC_DRAWBAR_0 + 1] = 0;
-        midiControl[CC_DRAWBAR_0 + 2] = 0;
-        midiControl[CC_DRAWBAR_0 + 3] = 127;
-        midiControl[CC_DRAWBAR_0 + 4] = 0;
-        midiControl[CC_DRAWBAR_0 + 5] = 0;
-        midiControl[CC_DRAWBAR_0 + 6] = 0;
-        midiControl[CC_DRAWBAR_0 + 7] = 0;
-        midiControl[CC_DRAWBAR_0 + 8] = 0;
-        midiControl[CC_DRAWBAR_0 + 9] = 0;
-        break;
-    case ALL_DRAWBARS:
-        midiControl[CC_DRAWBAR_0 + 1] = 127;
-        midiControl[CC_DRAWBAR_0 + 2] = 127;
-        midiControl[CC_DRAWBAR_0 + 3] = 127;
-        midiControl[CC_DRAWBAR_0 + 4] = 127;
-        midiControl[CC_DRAWBAR_0 + 5] = 127;
-        midiControl[CC_DRAWBAR_0 + 6] = 127;
-        midiControl[CC_DRAWBAR_0 + 7] = 127;
-        midiControl[CC_DRAWBAR_0 + 8] = 127;
-        midiControl[CC_DRAWBAR_0 + 9] = 127;
-        break;
-    case PERCUSSION:
-        midiControl[CC_PERCUSSION] = 127;
-        midiControl[CC_PERCUSSION_THIRD] = 127;
-        midiControl[CC_ROTARY_STOP] = 127;
-        break;
-    case VIBRATO:
-        midiControl[CC_VIBRATO] = 127;
-        midiControl[CC_VIBRATO_MODE] = 127;
-        midiControl[CC_ROTARY_STOP] = 127;
-        break;
-    case LESLIE:
-        midiControl[CC_ROTARY_STOP] = 0;
-        midiControl[CC_ROTARY_SPEED] = 0;
-        break;
-    case LESLIE_FAST_GROWL:
-        midiControl[CC_ROTARY_STOP] = 0;
-        midiControl[CC_ROTARY_SPEED] = 127;
-        midiControl[CC_SPEAKER_DRIVE] = 127;
-        break;
-    case FULL_POLYPHONY:
-        // cheating around what sounds like some overflow / sign errors
-        midiControl[CC_DRAWBAR_0 + 1] = 0;
-        midiControl[CC_DRAWBAR_0 + 2] = 0;
-        midiControl[CC_DRAWBAR_0 + 3] = 0;
-        midiControl[CC_DRAWBAR_0 + 4] = 0;
-        midiControl[CC_DRAWBAR_0 + 5] = 0;
-        midiControl[CC_DRAWBAR_0 + 6] = 127;
-        midiControl[CC_DRAWBAR_0 + 7] = 127;
-        midiControl[CC_DRAWBAR_0 + 8] = 127;
-        midiControl[CC_DRAWBAR_0 + 9] = 127;
-        midiControl[CC_ROTARY_SPEED] = 0;
-        fullPolyphony();
-        break;
-    }
-
-    updateLeslieAmplifier();
-    updateLeslieRotation();
-    updatePercussionEnvelope();
-    updateTonewheelVolumes();
-    updateVibrato();
 }
 
 void setup() {
@@ -237,16 +122,11 @@ void setup() {
 
     AudioMemory(10);
 
-    leslieBassR.init();
-    leslieTrebleR.init();
-    leslieBassL.init();
-    leslieTrebleL.init();
-
     tonewheels.init();
     percussion.init();
     vibrato.init();
+    drawbars.init();
 
-    reset();
 
     swell.gain(1.0);
 
@@ -254,11 +134,6 @@ void setup() {
     organOut.gain(1, 0.50); // percussionEnv
     organOut.gain(2, 0);
     organOut.gain(3, 0);
-
-    leslieR.gain(0, 0.70); // bass
-    leslieR.gain(1, 0.30); // treble
-    leslieL.gain(0, 0.70); // bass
-    leslieL.gain(1, 0.30); // treble
 
     // The antialias filter is here for two purposes:
     //
@@ -269,21 +144,18 @@ void setup() {
     // reducing key click.
     antialias.setLowpass(0, 2150, 0.707);
 
-    audioShield.enable();
-    audioShield.volume(0.5);
-
-    usbMIDI.begin();
-    usbMIDI.setHandleControlChange(handleControlChange);
-    usbMIDI.setHandleNoteOn(handleNoteOn);
-    usbMIDI.setHandleNoteOff(handleNoteOff);
+    lowerKeybed.init();
+    upperKeybed.init();
+    lowerKeybed.setHandleKeyPressed(handleNoteOn);
+    upperKeybed.setHandleKeyReleased(handleNoteOff);
 }
 
 int count = 0;
 void loop() {
     usbMIDI.read();
     if ((count++ % 500000) == 0) {
-        status();
-        statusVolume();
+        DEBUG_status();
+        DEBUG_statusVolume();
     }
 }
 
@@ -304,9 +176,9 @@ void randomDrawbars() {
     updateTonewheelVolumes();
 }
 
-void handleNoteOn(byte chan, byte note, byte velocity) {
-    Serial.print("Note on: ");
-    Serial.print(note);
+void handleNoteOn(uint8_t key) {
+    Serial.print("Key pressed: ");
+    Serial.print(key);
     Serial.print("\n");
 
     // MIDI notes always have the high bit unset, but just in case.
@@ -350,7 +222,7 @@ void handleNoteOff(byte chan, byte note, byte vel) {
 void updateReset() {
     if (midiControl[CC_RESET]) {
         midiControl[CC_RESET] = 0;
-        reset();
+        init();
     }
 }
 
@@ -420,46 +292,6 @@ void updateTonewheelVolumes() {
     tonewheels.setVolumes(volumes);
 }
 
-void updateLeslieAmplifier() {
-    float k = remap((float)midiControl[CC_SPEAKER_DRIVE], 0, 127, 5.0, 50.0);
-    preamp.setK(k);
-    crossover.frequency(800);
-    crossover.resonance(0.707);
-}
-
-void updateLeslieRotation() {
-    // Reset some things that should be constant.
-    leslieBassR.setTremoloDepth(0.3);
-    leslieTrebleR.setTremoloDepth(0.1);
-    leslieBassL.setTremoloDepth(0.3);
-    leslieTrebleL.setTremoloDepth(0.1);
-
-    // Vibrato in the AMFM blocks currently has some fizz artifacts.
-
-    // These Leslie speeds are from
-    // http://www.dairiki.org/HammondWiki/LeslieRotationSpeed
-
-    if (midiControl[CC_ROTARY_STOP]) {
-        // Stop
-        leslieBassR.setRotationRate(0);
-        leslieTrebleR.setRotationRate(0);
-        leslieBassL.setRotationRate(0);
-        leslieTrebleL.setRotationRate(0);
-    } else if (midiControl[CC_ROTARY_SPEED]) {
-        // Fast
-        leslieBassR.setRotationRate(5.7);
-        leslieTrebleR.setRotationRate(6.66);
-        leslieBassL.setRotationRate(5.7);
-        leslieTrebleL.setRotationRate(6.66);
-    } else {
-        // Slow
-        leslieBassR.setRotationRate(0.666);
-        leslieTrebleR.setRotationRate(0.8);
-        leslieBassL.setRotationRate(0.666);
-        leslieTrebleL.setRotationRate(0.8);
-    }
-}
-
 float remap(float v, float oldmin, float oldmax, float newmin, float newmax) {
     return newmin + (v - oldmin) * (newmax - newmin) / (oldmax - oldmin);
 }
@@ -508,7 +340,7 @@ void handleControlChange(byte chan, byte ctrl, byte val) {
     }
 }
 
-void showKeys() {
+void DEBUG_showKeys() {
     for (int i = 0; i < 62; i++) {
         Serial.print("keys[");
         Serial.print(i);
@@ -518,7 +350,7 @@ void showKeys() {
     }
 }
 
-void showVolumes(uint16_t volumes[92]) {
+void DEBUG_showVolumes(uint16_t volumes[92]) {
     for (int i = 0; i < 92; i++) {
         Serial.print("volumes[");
         Serial.print(i);
@@ -528,7 +360,8 @@ void showVolumes(uint16_t volumes[92]) {
     }
 }
 
-void status() {
+/// @brief Print status to the debug console
+void DEBUG_status() {
     Serial.print("CPU: ");
     Serial.print("tonewheels=");
     Serial.print(tonewheels.processorUsage());
@@ -562,7 +395,8 @@ void status() {
     Serial.println();
 }
 
-void statusVolume() {
+/// @brief Print volume and tonewheel status to the debug console
+void DEBUG_statusVolume() {
     Serial.print("Volume: ");
     Serial.print("tonewheels=");
     Serial.print(tonewheelsMonitor.volumeUsageMin());
@@ -577,7 +411,8 @@ void statusVolume() {
     tonewheelsMonitor.reset();
 }
 
-void statusPerc() {
+/// @brief Print volume and tonewheel status to the debug console
+void DEBUG_statusPerc() {
     Serial.print("percOn=");
     Serial.print(midiControl[CC_PERCUSSION]);
     Serial.print("    ");
