@@ -4,8 +4,7 @@
 #define VIBRATO_AUDIO_H
 
 #include <Audio.h>
-
-#include "vibrato.h"
+#include <organ.h>
 
 // Simulate the Hammond Vibrato/Chorus scanner. Originally, this is a
 // 1ms delay line with 9 taps. The circuit crossfades between the taps
@@ -16,17 +15,6 @@
 // We'll keep one block around to maintain a 1ms ring buffer. Each
 // update() cycle reads the input block, writes it to the ring buffer,
 // and writes phase modulated output.
-
-enum VibratoMode {
-    Off = 0,
-    V1,
-    V2,
-    V3,
-    C1,
-    C2,
-    C3,
-};
-
 // Vibrato implements the Vibrato/Chorus scanner of a Hammond B-3.
 class Vibrato : public AudioStream {
   public:
@@ -42,26 +30,26 @@ class Vibrato : public AudioStream {
         }
 
         scan_phase = 0;
-        setMode(Off);
+        setMode(Organ::VibratoMode::C1);
     }
 
-    void setMode(VibratoMode mode) {
-        if (mode == V1) {
+    void setMode(Organ::VibratoMode mode) {
+        if (mode == Organ::VibratoMode::V1) {
             depth = 3;
             mix = 0;
-        } else if (mode == V2) {
+        } else if (mode == Organ::VibratoMode::V2) {
             depth = 2;
             mix = 0;
-        } else if (mode == V3) {
+        } else if (mode == Organ::VibratoMode::V3) {
             depth = 1;
             mix = 0;
-        } else if (mode == C1) {
+        } else if (mode == Organ::VibratoMode::C1) {
             depth = 3;
             mix = 1;
-        } else if (mode == C2) {
+        } else if (mode == Organ::VibratoMode::C2) {
             depth = 2;
             mix = 1;
-        } else if (mode == C3) {
+        } else if (mode == Organ::VibratoMode::C3) {
             depth = 1;
             mix = 1;
         } else {

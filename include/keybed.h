@@ -7,16 +7,12 @@
 #define KEYBED_H
 
 #include <Arduino.h>
-#include <bitset>
-#include <vector>
+#include <organ.h>
+#include <ISystem.h>
 
 #define POLLING_INTERVAL (10)
-#define NUM_ROWS (6)
-#define NUM_COLS (11)
-#define NUM_KEYBEDS (2)
-#define LATCH_PIN (18)
 
-class Keybed {
+class Keybed : ISystem {
   public:
     /// @brief create a keybed instance to handle note changes
     /// @param shift_reg_bit the first bit of the shift register's matrix output
@@ -29,10 +25,9 @@ class Keybed {
     /// to the previous, and dispatch messages to the keybed's subscribers as
     /// required
     void update() {
-        // if the polling interval is exceeded then repoll
+        // if the polling interval is exceeded then re-read the keybeds
         if (millis >= POLLING_INTERVAL) {
-            // set global
-            current_key_state = SPI_decode();
+            Organ::SPI_update_key_state();
             millis = 0;
         }
         // always handle state change comparing global to local
@@ -53,7 +48,6 @@ class Keybed {
 
   private:
     static elapsedMillis millis;
-    static std::array<uint64_t, NUM_KEYBEDS> current_key_state;
 
     uint8_t keybed_idx;
     uint64_t keybed_state;
@@ -63,8 +57,8 @@ class Keybed {
 
     void handle_key_state_change() {
         // first find the keys that have changed
-        uint64_t pressedKeys = current_key_state[keybed_idx] & ~keybed_state;
-        uint64_t releasedKeys = keybed_state & ~current_key_state[keybed_idx];
+        uint64_t pressedKeys = Organ::current_key_state[keybed_idx] & ~keybed_state;
+        uint64_t releasedKeys = keybed_state & ~Organ::current_key_state[keybed_idx];
         int keyId;
 
         // variation of Brian Kernighan's algorithm to get the indices of set bits.
@@ -85,52 +79,7 @@ class Keybed {
         }
 
         // update the local state now
-        keybed_state = current_key_state[keybed_idx];
-    }
-
-    static std::array<uint64_t, NUM_KEYBEDS> SPI_decode() {
-        // two keybeds
-        std::array<uint64_t, NUM_KEYBEDS> keybed = {0x0};
-
-        for (int row = 0; row < NUM_ROWS; row++) {
-            // write to the HC595
-            digitalWriteFast(LATCH_PIN, LOW);
-            SPI.transfer(1 << row);
-            digitalWriteFast(LATCH_PIN, HIGH);
-            // allow time for the data to be written to the 165s register
-            delayMicroseconds(1);
-            // latch data
-            digitalWriteFast(LATCH_PIN, LOW);
-
-            // number of bytes needed to store the data (add 7 so that we round up)
-            int num_bytes = ((NUM_COLS * NUM_KEYBEDS) + 7) / 8;
-
-            /*
-             * Read the SPI bus one byte at a time and write 1s for the pressed
-             * keys to the corresponding key value in the array for the keybed
-             *
-             * We have to multiply by NUM_ROWS to get the corresponding key.
-             * I.e. key = COL * NUM_ROWS + ROW.
-             */
-            for (char i = 0; i < num_bytes; i++) {
-                uint8_t data = SPI.transfer(0x0);
-                while (data != 0) {
-                    // first index of set bit
-                    char idx = __builtin_ctzll(data);
-                    char col = (idx + (i * 8));
-                    // Set the keybed for the corresponding byte
-                    keybed[col / NUM_COLS] |= 0x1 << ((col * NUM_ROWS) + row);
-                    // unset the idx bit
-                    data &= (data - 1);
-                }
-            }
-
-            // just debug the top keybed
-            std::string binary_string = std::bitset<64>(keybed[0]).to_string();
-            Serial.print(binary_string.c_str());
-        }
-        Serial.println();
-        return keybed;
+        keybed_state = Organ::current_key_state[keybed_idx];
     }
 };
 

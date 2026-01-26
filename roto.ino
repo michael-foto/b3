@@ -3,10 +3,8 @@
 #include <SPI.h>
 #include <SerialFlash.h>
 
-#include "amfm_audio.h"
 #include "manual.h"
 #include "monitor_audio.h"
-#include "preamp_audio.h"
 #include "tonewheel_osc_audio.h"
 #include "vibrato_audio.h"
 #include "keybed.h"
@@ -44,6 +42,7 @@ AudioConnection patchCord7(antialias, 0, dac, 0);
 
 Keybed* upperKeybed;
 Keybed* lowerKeybed;
+Drawbars* drawbars;
 
 // TODO later: add MIDI out via USB
 // MIDI key values
@@ -74,24 +73,12 @@ Keybed* lowerKeybed;
 // TODO: we might not need this as we can just check if the keystate was 0 on any state change?
 uint8_t numKeysDown = 0;
 
-void handleNoteOn(byte chan, byte note, byte vel);
-void handleNoteOff(byte chan, byte note, byte vel);
-void handleControlChange(byte chan, byte ctrl, byte val);
-
-// init restores everything to just-booted state:
-// 1) it thinks all keys are up
-// 2) drawbar registration is set to 888800000
-// 3) percussion is off, vibrato is set to C1
-// 4) the Leslie is set to slow
 void init() {
-    // Release all keys and reset all control settings.
-    memset(midiKeys, 0, 127);
-    memset(midiControl, 0, 127);
-
     // Poll and set all drawbars
     for (int i = 1; i <= 9; i++) {
         midiControl[CC_DRAWBAR_0 + i] = random(0, 127);
     }
+    drawbars->update();
 
     updatePercussionEnvelope();
     updateTonewheelVolumes();
@@ -110,7 +97,6 @@ void setup() {
     tonewheels.init();
     percussion.init();
     vibrato.init();
-    drawbars.init();
 
 
     swell.gain(1.0);
@@ -137,8 +123,13 @@ void setup() {
 
 int count = 0;
 void loop() {
+    // Poll the keybeds
     upperKeybed->update();
     lowerKeybed->update();
+
+    // Poll the switches
+    updateVibrato();
+    updatePercussionEnvelope();
 
     // Dump debug messages every 500000 loop iterations
     if ((count++ % 500000) == 0) {
@@ -207,13 +198,6 @@ void handleNoteOff(uint8_t key) {
     updateTonewheelVolumes();
 }
 
-void updateReset() {
-    if (midiControl[CC_RESET]) {
-        midiControl[CC_RESET] = 0;
-        init();
-    }
-}
-
 void updateVibrato() {
     uint8_t mode = midiControl[CC_VIBRATO_MODE];
     if (mode == 0) {
@@ -260,9 +244,7 @@ uint8_t percBars[10] = {0};
 uint16_t percVolumes[92] = {0};
 
 void updateTonewheelVolumes() {
-    for (int i = 1; i < 10; i++) {
-        bars[i] = manual_quantize_drawbar(midiControl[CC_DRAWBAR_0 + i]);
-    }
+    drawbars.upper();
 
     if (midiControl[CC_PERCUSSION]) {
         bars[9] = 0;
@@ -276,7 +258,7 @@ void updateTonewheelVolumes() {
     manual_fill_volumes(upperKeybed.getKeyState(), percBars, percVolumes);
     percussion.setVolumes(percVolumes);
 
-    manual_fill_volumes(&midiKeys[MANUAL_KEY_0], bars, volumes);
+    manual_fill_volumes(upperKeybed, bars, volumes);
     tonewheels.setVolumes(volumes);
 }
 
@@ -328,6 +310,7 @@ void handleControlChange(byte chan, byte ctrl, byte val) {
     }
 }
 
+#pragma region DEBUG
 void DEBUG_showKeys() {
     for (int i = 0; i < 62; i++) {
         Serial.print("keys[");
@@ -415,3 +398,4 @@ void DEBUG_statusPerc() {
     Serial.print("    ");
     Serial.println();
 }
+#pragma endregion
