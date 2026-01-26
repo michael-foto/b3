@@ -42,32 +42,15 @@ AudioOutputAnalog dac;
 AudioConnection patchCord7(antialias, 0, dac, 0);
 #pragma endregion
 
-#ifdef AUDIO_INTERFACE
-// If the board is configured for USB audio, mirror the dac output to USB.
-AudioOutputUSB usbAudio;
-AudioConnection patchCord8(antialias, 0, usbAudio, 0);
-AudioConnection patchCord9(antialias, 0, usbAudio, 1);
-#endif
+Keybed* upperKeybed;
+Keybed* lowerKeybed;
 
-Keybed upperKeybed;
-Keybed lowerKeybed;
-Drawbars drawbars;
-
-// MIDI state. keys[n] will be nonzero if a key is down (value being
-// the most recent velocity). control[n] is the most recent value of a
-// control message.
-//
-// In both cases, the highest bit indicates whether the value is the
-// result of a message (1 if yes, 0 if it hasn't changed since
-// initialization.
-uint8_t midiKeys[127] = {0};
-uint8_t midiControl[127] = {0};
-// TODO: use midi keys & midi data struct
-
-
+// TODO later: add MIDI out via USB
+// MIDI key values
 #define MANUAL_KEY_0 (35)
 #define MANUAL_KEY_61 (MANUAL_KEY_0 + 61)
 
+// MIDI controller names
 #define CC_SWELL (11)
 #define CC_RESET (46)
 #define CC_DRAWBAR_0 (69)
@@ -83,11 +66,12 @@ uint8_t midiControl[127] = {0};
 #define CC_SPEAKER_DRIVE (111)
 
 // Teensy input/outputs
-#define TEENSY_LESLIE_STOP (0)
-#define TEENSY_LESLIE_SPEED (0)
+// #define TEENSY_LESLIE_STOP (0)
+// #define TEENSY_LESLIE_SPEED (0)
 
 // numKeysDown is used to keep the percussion effect single triggered:
 // only the first key down affects the percussion setting.
+// TODO: we might not need this as we can just check if the keystate was 0 on any state change?
 uint8_t numKeysDown = 0;
 
 void handleNoteOn(byte chan, byte note, byte vel);
@@ -108,8 +92,6 @@ void init() {
     for (int i = 1; i <= 9; i++) {
         midiControl[CC_DRAWBAR_0 + i] = random(0, 127);
     }
-    // Minimal drive by default.
-    midiControl[CC_SPEAKER_DRIVE] = 0;
 
     updatePercussionEnvelope();
     updateTonewheelVolumes();
@@ -121,6 +103,9 @@ void setup() {
     Serial.begin(115200);
 
     AudioMemory(10);
+
+    upperKeybed = new Keybed(0);
+    lowerKeybed = new Keybed(11);
 
     tonewheels.init();
     percussion.init();
@@ -144,15 +129,18 @@ void setup() {
     // reducing key click.
     antialias.setLowpass(0, 2150, 0.707);
 
-    lowerKeybed.init();
-    upperKeybed.init();
-    lowerKeybed.setHandleKeyPressed(handleNoteOn);
-    upperKeybed.setHandleKeyReleased(handleNoteOff);
+    upperKeybed->setHandleKeyPressed(handleNoteOn);
+    upperKeybed->setHandleKeyReleased(handleNoteOff);
+    lowerKeybed->setHandleKeyPressed(handleNoteOn);
+    lowerKeybed->setHandleKeyReleased(handleNoteOff);
 }
 
 int count = 0;
 void loop() {
-    usbMIDI.read();
+    upperKeybed->update();
+    lowerKeybed->update();
+
+    // Dump debug messages every 500000 loop iterations
     if ((count++ % 500000) == 0) {
         DEBUG_status();
         DEBUG_statusVolume();
@@ -198,12 +186,12 @@ void handleNoteOn(uint8_t key) {
     }
 }
 
-void handleNoteOff(byte chan, byte note, byte vel) {
+void handleNoteOff(uint8_t key) {
     Serial.print("Note off: ");
-    Serial.print(note);
+    Serial.print(key);
     Serial.print("\n");
 
-    if (note & 0x80) {
+    if (key & 0x80) {
         return;
     }
 
@@ -285,7 +273,7 @@ void updateTonewheelVolumes() {
         }
     }
 
-    manual_fill_volumes(&midiKeys[MANUAL_KEY_0], percBars, percVolumes);
+    manual_fill_volumes(upperKeybed.getKeyState(), percBars, percVolumes);
     percussion.setVolumes(percVolumes);
 
     manual_fill_volumes(&midiKeys[MANUAL_KEY_0], bars, volumes);

@@ -3,3 +3,5 @@ roto.test
 roto.test.dSYM
 .pio
 .vscode/c_cpp_properties.json
+.pio/build
+.vscode/c_cpp_properties.json
