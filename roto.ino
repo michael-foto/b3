@@ -1,14 +1,14 @@
 #include <Audio.h>
-#include <Wire.h>
 #include <SPI.h>
 #include <SerialFlash.h>
+#include <Wire.h>
 
+#include "drawbars.h"
+#include "keybed.h"
 #include "manual.h"
 #include "monitor_audio.h"
 #include "tonewheel_osc_audio.h"
 #include "vibrato_audio.h"
-#include "keybed.h"
-#include "drawbars.h"
 
 #pragma region Audio Connections
 AudioMixer4 organOut;
@@ -40,9 +40,11 @@ AudioOutputAnalog dac;
 AudioConnection patchCord7(antialias, 0, dac, 0);
 #pragma endregion
 
-Keybed* upperKeybed;
-Keybed* lowerKeybed;
-Drawbars* drawbars;
+std::vector<ISystem> systems = {};
+
+Keybed *upperKeybed;
+Keybed *lowerKeybed;
+Drawbars *drawbars;
 
 // TODO later: add MIDI out via USB
 // MIDI key values
@@ -75,15 +77,11 @@ uint8_t numKeysDown = 0;
 
 void init() {
     // Poll and set all drawbars
-    for (int i = 1; i <= 9; i++) {
-        midiControl[CC_DRAWBAR_0 + i] = random(0, 127);
-    }
     drawbars->update();
 
     updatePercussionEnvelope();
     updateTonewheelVolumes();
     updateVibrato();
-
 }
 
 void setup() {
@@ -92,12 +90,12 @@ void setup() {
     AudioMemory(10);
 
     upperKeybed = new Keybed(0);
-    lowerKeybed = new Keybed(11);
+    lowerKeybed = new Keybed(1);
+    drawbars = new Drawbars();
 
     tonewheels.init();
     percussion.init();
     vibrato.init();
-
 
     swell.gain(1.0);
 
@@ -160,13 +158,7 @@ void handleNoteOn(uint8_t key) {
     Serial.print(key);
     Serial.print("\n");
 
-    // MIDI notes always have the high bit unset, but just in case.
-    if (note & 0x80) {
-        return;
-    }
-
-    midiKeys[note] = velocity;
-    if (note <= MANUAL_KEY_0 || note > MANUAL_KEY_61) {
+    if (key < 0 || key >= 61) {
         return;
     }
 
@@ -238,27 +230,25 @@ void updatePercussionEnvelope() {
     }
 }
 
-uint8_t bars[10] = {0};
-uint16_t volumes[92] = {0};
-uint8_t percBars[10] = {0};
-uint16_t percVolumes[92] = {0};
-
 void updateTonewheelVolumes() {
-    drawbars.upper();
-
-    if (midiControl[CC_PERCUSSION]) {
-        bars[9] = 0;
-        if (midiControl[CC_PERCUSSION_THIRD]) {
-            percBars[5] = manual_quantize_drawbar(127);
+    if (Organ::percussion.on) {
+        // disable drawbar 9 on the upper manual if percussion is on
+        drawbars->upper[9] = 0;
+        if (Organ::percussion.type == Organ::PercussionHarmonic::Third) {
+            Organ::percussion_drawbars[5] = 8;
         } else {
-            percBars[4] = manual_quantize_drawbar(127);
+            Organ::percussion_drawbars[4] = 8;
         }
     }
 
-    manual_fill_volumes(upperKeybed.getKeyState(), percBars, percVolumes);
+    // Percussion only functions for the upper keybed
+    manual_fill_volumes(upperKeybed->keybed_state, Organ::percussion_drawbars, Organ::percussion_volumes);
     percussion.setVolumes(percVolumes);
 
-    manual_fill_volumes(upperKeybed, bars, volumes);
+    manual_fill_volumes(upperKeybed->keybed_state, drawbars->upper, volumes);
+    tonewheels.setVolumes(volumes);
+
+    manual_fill_volumes(lowerKeybed->keybed_state, bars, volumes);
     tonewheels.setVolumes(volumes);
 }
 

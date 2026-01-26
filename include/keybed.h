@@ -7,19 +7,21 @@
 #define KEYBED_H
 
 #include <Arduino.h>
-#include <organ.h>
 #include <ISystem.h>
+#include <organ.h>
 
 #define POLLING_INTERVAL (10)
 
 class Keybed : ISystem {
   public:
     /// @brief create a keybed instance to handle note changes
-    /// @param shift_reg_bit the first bit of the shift register's matrix output
-    /// that corresponds to this key
-    /// E.g. for a 6x11 matrix, this will be the 11th bit (0-index);
-    Keybed(uint8_t keybed_idx)
-        : keybed_idx() {}
+    /// @param id the array index of the keybed matrix as scanned
+    Keybed(uint8_t id)
+        : keybed_idx(id) {}
+
+    /// @brief the current state of the keybed. 0 is up and 1 is pressed.
+    /// each bit index corresponds to the given key from 0-61
+    uint64_t keybed_state;
 
     /// @brief trigger the SPI routine to poll the current key state, compare
     /// to the previous, and dispatch messages to the keybed's subscribers as
@@ -49,9 +51,7 @@ class Keybed : ISystem {
   private:
     static elapsedMillis millis;
 
-    uint8_t keybed_idx;
-    uint64_t keybed_state;
-
+    const uint8_t keybed_idx;
     void (*on_keyPress)(uint8_t key) = nullptr;
     void (*on_keyUp)(uint8_t key) = nullptr;
 

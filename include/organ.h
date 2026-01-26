@@ -70,7 +70,14 @@ typedef struct {
 
 std::array<uint64_t, NUM_KEYBEDS> current_key_state = {0x0};
 std::array<uint16_t, NUM_DRAWBARS> current_drawbar_state = {0x0};
+
 Vibrato upper_vibrato = {VibratoMode::V1, false, 1};
+Percussion percussion = {};
+
+uint16_t tonewheel_volumes[92] = {0};
+uint8_t percussion_drawbars[10] = {0};
+uint16_t percussion_volumes[92] = {0};
+
 
 void serial_init() {
     Serial.begin(9600);
