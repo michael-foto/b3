@@ -12,12 +12,13 @@
 
 #define POLLING_INTERVAL (10)
 
-class Keybed : ISystem {
+class Keybed : public ISystem {
   public:
     /// @brief create a keybed instance to handle note changes
     /// @param id the array index of the keybed matrix as scanned
-    Keybed(uint8_t id)
-        : keybed_idx(id) {}
+    Keybed(uint8_t id) : keybed_idx(id) {
+        Organ::keybed_init();
+    }
 
     /// @brief the current state of the keybed. 0 is up and 1 is pressed.
     /// each bit index corresponds to the given key from 0-61
@@ -38,13 +39,13 @@ class Keybed : ISystem {
 
     /// @brief Fires the callback when a key is pressed
     /// @param callback function when a key press is triggered
-    void setHandleKeyPressed(void (*callback)(uint8_t key)) {
+    void setHandleKeyPressed(void (*callback)(uint8_t keybed_idx, uint8_t key)) {
         on_keyPress = callback;
     }
 
     /// @brief Fires the callback when a key is pressed
     /// @param callback function when a key is released
-    void setHandleKeyReleased(void (*callback)(uint8_t key)) {
+    void setHandleKeyReleased(void (*callback)(uint8_t keybed_idx, uint8_t key)) {
         on_keyUp = callback;
     }
 
@@ -52,8 +53,8 @@ class Keybed : ISystem {
     static elapsedMillis millis;
 
     const uint8_t keybed_idx;
-    void (*on_keyPress)(uint8_t key) = nullptr;
-    void (*on_keyUp)(uint8_t key) = nullptr;
+    void (*on_keyPress)(uint8_t keybed_idx, uint8_t key) = nullptr;
+    void (*on_keyUp)(uint8_t keybed_idx, uint8_t key) = nullptr;
 
     void handle_key_state_change() {
         // first find the keys that have changed
@@ -67,14 +68,14 @@ class Keybed : ISystem {
         while (pressedKeys != 0) {
             // get the index of the rightmost set bit
             keyId = __builtin_ctzll(pressedKeys);
-            on_keyPress(keyId);
+            on_keyPress(keybed_idx, keyId);
             // Clear the least significant set bit
             pressedKeys &= (pressedKeys - 1);
         }
 
         while (releasedKeys != 0) {
             keyId = __builtin_ctzll(releasedKeys);
-            on_keyUp(keyId);
+            on_keyUp(keybed_idx, keyId);
             releasedKeys &= (releasedKeys - 1);
         }
 

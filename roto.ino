@@ -2,6 +2,7 @@
 #include <SPI.h>
 #include <SerialFlash.h>
 #include <Wire.h>
+#include <memory>
 
 #include "drawbars.h"
 #include "keybed.h"
@@ -14,33 +15,35 @@
 AudioMixer4 organOut;
 TonewheelOsc tonewheels;
 Monitor tonewheelsMonitor;
-Vibrato vibrato;
+Vibrato upperVibrato;
+Vibrato lowerVibrato;
 
 AudioConnection patchCord0(tonewheels, 0, tonewheelsMonitor, 0);
-AudioConnection patchCord1(tonewheelsMonitor, 0, vibrato, 0);
-AudioConnection patchCord2(vibrato, 0, organOut, 0);
+AudioConnection patchCord1(tonewheelsMonitor, 0, upperVibrato, 0);
+AudioConnection patchCord2(upperVibrato, 0, lowerVibrato, 0);
+AudioConnection patchCord3(lowerVibrato, 0, organOut, 0);
 
 TonewheelOsc percussion;
 AudioEffectEnvelope percussionEnv;
 
-AudioConnection patchCord3(percussion, 0, percussionEnv, 0);
-AudioConnection patchCord4(percussionEnv, 0, organOut, 1);
+AudioConnection patchCord4(percussion, 0, percussionEnv, 0);
+AudioConnection patchCord5(percussionEnv, 0, organOut, 1);
 
 AudioAmplifier swell;
-AudioConnection patchCord5(organOut, 0, swell, 0);
+AudioConnection patchCord6(organOut, 0, swell, 0);
 
 // This antialias filter is here to band limit the organ signal, in
 // case key click transients are too high frequency, and also to give
 // a slight reduction in key click.
 AudioFilterBiquad antialias;
-AudioConnection patchCord6(swell, 0, antialias, 0);
+AudioConnection patchCord7(swell, 0, antialias, 0);
 
 // Teensy DAC output
 AudioOutputAnalog dac;
-AudioConnection patchCord7(antialias, 0, dac, 0);
+AudioConnection patchCord8(antialias, 0, dac, 0);
 #pragma endregion
 
-std::vector<ISystem> systems = {};
+std::vector<ISystem *> systems;
 
 Keybed *upperKeybed;
 Keybed *lowerKeybed;
@@ -66,36 +69,32 @@ Drawbars *drawbars;
 #define CC_VIBRATO (107)
 #define CC_SPEAKER_DRIVE (111)
 
-// Teensy input/outputs
-// #define TEENSY_LESLIE_STOP (0)
-// #define TEENSY_LESLIE_SPEED (0)
-
-// numKeysDown is used to keep the percussion effect single triggered:
-// only the first key down affects the percussion setting.
-// TODO: we might not need this as we can just check if the keystate was 0 on any state change?
-uint8_t numKeysDown = 0;
-
-void init() {
-    // Poll and set all drawbars
-    drawbars->update();
-
-    updatePercussionEnvelope();
-    updateTonewheelVolumes();
-    updateVibrato();
-}
-
 void setup() {
-    Serial.begin(115200);
-
     AudioMemory(10);
 
     upperKeybed = new Keybed(0);
+    upperKeybed->setHandleKeyPressed(handleNoteOn);
+    upperKeybed->setHandleKeyReleased(handleNoteOff);
+    systems.push_back(upperKeybed);
+
     lowerKeybed = new Keybed(1);
+    lowerKeybed->setHandleKeyPressed(handleNoteOn);
+    lowerKeybed->setHandleKeyReleased(handleNoteOff);
+    systems.push_back(lowerKeybed);
+
     drawbars = new Drawbars();
+    drawbars->setOnDrawbarChange(updateTonewheelVolumes);
+    systems.push_back(drawbars);
+
+    Organ::serial_init();
+    // TODO: create classes for this (systems)
+    Organ::percussion_init();
+    Organ::vibrato_init();
 
     tonewheels.init();
     percussion.init();
-    vibrato.init();
+    upperVibrato.init();
+    lowerVibrato.init();
 
     swell.gain(1.0);
 
@@ -112,21 +111,20 @@ void setup() {
     // 2) To cut the transients when turning on new tonewheels,
     // reducing key click.
     antialias.setLowpass(0, 2150, 0.707);
-
-    upperKeybed->setHandleKeyPressed(handleNoteOn);
-    upperKeybed->setHandleKeyReleased(handleNoteOff);
-    lowerKeybed->setHandleKeyPressed(handleNoteOn);
-    lowerKeybed->setHandleKeyReleased(handleNoteOff);
 }
 
 int count = 0;
 void loop() {
-    // Poll the keybeds
-    upperKeybed->update();
-    lowerKeybed->update();
+    // Update each system in the organ
+    for (const auto &system : systems) {
+        system->update();
+    }
 
     // Poll the switches
+    // TODO: move this to vibrato system
     updateVibrato();
+
+    // TODO: move this to percussion system
     updatePercussionEnvelope();
 
     // Dump debug messages every 500000 loop iterations
@@ -136,27 +134,12 @@ void loop() {
     }
 }
 
-int note2key(byte note) {
-    return (int)note - 35;
-}
-
-void fullPolyphony() {
-    for (int n = 0; n < 128; n++) {
-        handleNoteOn(1, n, 127);
-    }
-}
-
-void randomDrawbars() {
-    for (int i = 1; i <= 9; i++) {
-        midiControl[CC_DRAWBAR_0 + i] = random(0, 127);
-    }
-    updateTonewheelVolumes();
-}
-
-void handleNoteOn(uint8_t key) {
-    Serial.print("Key pressed: ");
-    Serial.print(key);
-    Serial.print("\n");
+void handleNoteOn(uint8_t keybed_idx, uint8_t key) {
+    DEBUG_PRINT("keybed: ");
+    DEBUG_PRINT(keybed_idx);
+    DEBUG_PRINT(", Key pressed: ");
+    DEBUG_PRINT(key);
+    DEBUG_PRINTLN();
 
     if (key < 0 || key >= 61) {
         return;
@@ -164,34 +147,41 @@ void handleNoteOn(uint8_t key) {
 
     updateTonewheelVolumes();
 
-    if (++numKeysDown == 1 && midiControl[CC_PERCUSSION]) {
+    // Top keyboard only
+    if (keybed_idx == 0 &&
+        // current key state has not been updated to the new state yet.
+        // I.e., if this is 0, then this is the first keypress
+        Organ::current_key_state[keybed_idx] == 0 &&
+        Organ::percussion.on) {
         percussionEnv.noteOn();
     }
 }
 
-void handleNoteOff(uint8_t key) {
-    Serial.print("Note off: ");
-    Serial.print(key);
-    Serial.print("\n");
+void handleNoteOff(uint8_t keybed_idx, uint8_t key) {
+    DEBUG_PRINT("keybed: ");
+    DEBUG_PRINT(keybed_idx);
+    DEBUG_PRINT(", Key released: ");
+    DEBUG_PRINT(key);
+    DEBUG_PRINTLN();
 
-    if (key & 0x80) {
+    if (key < 0 || key >= 61) {
         return;
-    }
-
-    midiKeys[note] = 0;
-    if (note <= MANUAL_KEY_0 || note > MANUAL_KEY_61) {
-        return;
-    }
-
-    if (--numKeysDown == 0 && midiControl[CC_PERCUSSION]) {
-        percussionEnv.noteOff();
     }
 
     updateTonewheelVolumes();
+
+    // Top keyboard only
+    if (keybed_idx == 0 &&
+        // current key state has not been updated to the new state yet.
+        // I.e., if this is a power of two then only one key was pressed - it must have been released
+        (Organ::current_key_state[keybed_idx] & (Organ::current_key_state[keybed_idx] - 1)) &&
+        Organ::percussion.on) {
+        percussionEnv.noteOff();
+    }
 }
 
 void updateVibrato() {
-    uint8_t mode = midiControl[CC_VIBRATO_MODE];
+    // uint8_t mode = Organ::upper_vibrato
     if (mode == 0) {
         vibrato.setMode(V1);
     } else if (mode <= 26) {
@@ -217,13 +207,13 @@ void updatePercussionEnvelope() {
     percussionEnv.sustain(0.0);
     percussionEnv.release(0.0);
 
-    if (midiControl[CC_PERCUSSION_FAST]) {
+    if (Organ::percussion.speed == Organ::Speed::Fast) {
         percussionEnv.decay(300.0);
     } else {
         percussionEnv.decay(630.0);
     }
 
-    if (midiControl[CC_PERCUSSION_SOFT]) {
+    if (Organ::percussion.volume == Organ::PercussionVolume::Soft) {
         organOut.gain(1, 0.25);
     } else {
         organOut.gain(1, 0.50);
@@ -243,13 +233,13 @@ void updateTonewheelVolumes() {
 
     // Percussion only functions for the upper keybed
     manual_fill_volumes(upperKeybed->keybed_state, Organ::percussion_drawbars, Organ::percussion_volumes);
-    percussion.setVolumes(percVolumes);
+    percussion.setVolumes(Organ::percussion_volumes);
 
-    manual_fill_volumes(upperKeybed->keybed_state, drawbars->upper, volumes);
-    tonewheels.setVolumes(volumes);
+    manual_fill_volumes(upperKeybed->keybed_state, drawbars->upper, Organ::tonewheel_volumes);
+    tonewheels.setVolumes(Organ::tonewheel_volumes);
 
-    manual_fill_volumes(lowerKeybed->keybed_state, bars, volumes);
-    tonewheels.setVolumes(volumes);
+    manual_fill_volumes(lowerKeybed->keybed_state, drawbars->lower, Organ::tonewheel_volumes);
+    tonewheels.setVolumes(Organ::tonewheel_volumes);
 }
 
 float remap(float v, float oldmin, float oldmax, float newmin, float newmax) {
@@ -274,16 +264,8 @@ void handleControlChange(byte chan, byte ctrl, byte val) {
     Serial.print(val, DEC);
     Serial.println();
 
-    if (ctrl & 0x80) {
-        return;
-    }
-
-    midiControl[ctrl] = val;
-
     if (ctrl == CC_SWELL) {
         swell.gain(remap((float)val, 0, 127, 0, 2.5));
-    } else if (ctrl == CC_RESET) {
-        updateReset();
     } else if (ctrl == CC_PERCUSSION) {
         updatePercussionEnvelope();
         updateTonewheelVolumes();
@@ -388,4 +370,3 @@ void DEBUG_statusPerc() {
     Serial.print("    ");
     Serial.println();
 }
-#pragma endregion

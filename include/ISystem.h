@@ -1,5 +1,6 @@
 class ISystem {
   public:
-    ISystem() {};
+    ISystem() = default;
+    virtual ~ISystem() = default;
     virtual void update() = 0;
 };

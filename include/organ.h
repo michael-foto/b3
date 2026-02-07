@@ -29,9 +29,24 @@
 #define DRAWBAR_MUX_PIN0 (0)
 #define LATCH_PIN (18)
 
+#define PERCUSSION_ON_PIN (7)
+#define PERCUSSION_VOL_PIN (6)
+#define PERCUSSION_SPEED_PIN (5)
+#define PERCUSSION_HARMONIC_PIN (4)
+
+#define VIBRATO_SELECT_PIN (A2)
+#define VIBRATO_UPPER_PIN (9)
+#define VIBRATO_LOWER_PIN (8)
+
+#define ROTO_FAST_PIN (10)
+#define ROTO_SLOW_PIN (24)
+
+#define LESLIE_SPEED_OUT_PIN (19)
+#define LESLIE_STOP_OUT_PIN (20)
+
 namespace Organ {
 
-enum class PercussionSpeed {
+enum class Speed {
     Fast,
     Slow
 };
@@ -47,7 +62,7 @@ enum class PercussionHarmonic {
 };
 
 typedef struct {
-    PercussionSpeed speed;
+    Speed speed;
     PercussionHarmonic type;
     PercussionVolume volume;
     boolean on;
@@ -68,22 +83,34 @@ typedef struct {
     boolean lower;
 } Vibrato;
 
+typedef struct {
+    Speed leslieSpeed;
+    boolean isStopped;
+} Leslie;
+
 std::array<uint64_t, NUM_KEYBEDS> current_key_state = {0x0};
 std::array<uint16_t, NUM_DRAWBARS> current_drawbar_state = {0x0};
 
+boolean keybed_initialised = false;
+
 Vibrato upper_vibrato = {VibratoMode::V1, false, 1};
+Vibrato lower_vibrato = {VibratoMode::V1, false, 1};
 Percussion percussion = {};
+Leslie leslie = {Speed::Slow, true};
 
 uint16_t tonewheel_volumes[92] = {0};
 uint8_t percussion_drawbars[10] = {0};
 uint16_t percussion_volumes[92] = {0};
-
 
 void serial_init() {
     Serial.begin(9600);
 }
 
 void keybed_init() {
+    if (keybed_initialised) {
+        return;
+    }
+
     pinMode(LATCH_PIN, OUTPUT);
     pinMode(SCK, OUTPUT);
     pinMode(MOSI, OUTPUT);
@@ -91,6 +118,8 @@ void keybed_init() {
 
     SPI.begin();
     SPI.beginTransaction(SPISettings(1000000, MSBFIRST, SPI_MODE0));
+
+    keybed_initialised = true;
 }
 
 void drawbars_init() {
@@ -103,6 +132,25 @@ void drawbars_init() {
 }
 
 void percussion_init() {
+    // percussion switches
+    pinMode(PERCUSSION_ON_PIN, INPUT_PULLUP);
+    pinMode(PERCUSSION_VOL_PIN, INPUT_PULLUP);
+    pinMode(PERCUSSION_SPEED_PIN, INPUT_PULLUP);
+    pinMode(PERCUSSION_HARMONIC_PIN, INPUT_PULLUP);
+}
+
+void vibrato_init() {
+    // vibrator selectors
+    pinMode(VIBRATO_SELECT_PIN, INPUT);
+    pinMode(VIBRATO_UPPER_PIN, INPUT_PULLUP);
+    pinMode(VIBRATO_LOWER_PIN, INPUT_PULLUP);
+}
+
+void leslie_init() {
+    pinMode(ROTO_FAST_PIN, INPUT_PULLUP);
+    pinMode(ROTO_SLOW_PIN, INPUT_PULLUP);
+    pinMode(LESLIE_SPEED_OUT_PIN, OUTPUT);
+    pinMode(LESLIE_STOP_OUT_PIN, OUTPUT);
 }
 
 void SPI_update_key_state() {
@@ -167,6 +215,20 @@ void read_drawbars() {
         DEBUG_PRINT(", ");
     }
     DEBUG_PRINTLN();
+}
+
+void read_percussion() {
+}
+
+void read_vibrato() {
+}
+
+void read_leslie() {
+}
+
+void write_leslie_output() {
+    digitalWrite(LESLIE_STOP_OUT_PIN, leslie.isStopped);
+    digitalWrite(LESLIE_SPEED_OUT_PIN, leslie.leslieSpeed == Speed::Fast ? 1 : 0);
 }
 
 }; // namespace Organ
