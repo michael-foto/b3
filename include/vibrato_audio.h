@@ -33,27 +33,32 @@ class Vibrato : public AudioStream {
         setMode(Organ::VibratoMode::C1);
     }
 
+    void off() {
+        depth = 8;
+    }
+
     void setMode(Organ::VibratoMode mode) {
-        if (mode == Organ::VibratoMode::V1) {
+        switch (mode) {
+        case Organ::VibratoMode::V1:
             depth = 3;
             mix = 0;
-        } else if (mode == Organ::VibratoMode::V2) {
+        case Organ::VibratoMode::V2:
             depth = 2;
             mix = 0;
-        } else if (mode == Organ::VibratoMode::V3) {
+        case Organ::VibratoMode::V3:
             depth = 1;
             mix = 0;
-        } else if (mode == Organ::VibratoMode::C1) {
+        case Organ::VibratoMode::C1:
             depth = 3;
             mix = 1;
-        } else if (mode == Organ::VibratoMode::C2) {
+        case Organ::VibratoMode::C2:
             depth = 2;
             mix = 1;
-        } else if (mode == Organ::VibratoMode::C3) {
+        case Organ::VibratoMode::C3:
             depth = 1;
             mix = 1;
-        } else {
-            depth = 8;
+        default:
+            break;
         }
     }
 
