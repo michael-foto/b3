@@ -10,7 +10,7 @@
 #include <ISystem.h>
 #include <organ.h>
 
-#define POLLING_INTERVAL (10)
+#define KEYBED_POLLING_INTERVAL (10)
 
 class Keybed : public ISystem {
   public:
@@ -18,18 +18,19 @@ class Keybed : public ISystem {
     /// @param id the array index of the keybed matrix as scanned
     Keybed(uint8_t id) : keybed_idx(id) {
         Organ::keybed_init();
+        millis = 0;
     }
 
     /// @brief the current state of the keybed. 0 is up and 1 is pressed.
     /// each bit index corresponds to the given key from 0-61
-    uint64_t keybed_state;
+    uint64_t keybed_state = 0;
 
     /// @brief trigger the SPI routine to poll the current key state, compare
     /// to the previous, and dispatch messages to the keybed's subscribers as
     /// required
     void update() {
         // if the polling interval is exceeded then re-read the keybeds
-        if (millis >= POLLING_INTERVAL) {
+        if (millis >= KEYBED_POLLING_INTERVAL) {
             Organ::SPI_update_key_state();
             millis = 0;
         }
@@ -50,7 +51,7 @@ class Keybed : public ISystem {
     }
 
   private:
-    static elapsedMillis millis;
+    elapsedMillis millis = 0;
 
     const uint8_t keybed_idx;
     void (*on_keyPress)(uint8_t keybed_idx, uint8_t key) = nullptr;
@@ -68,14 +69,18 @@ class Keybed : public ISystem {
         while (pressedKeys != 0) {
             // get the index of the rightmost set bit
             keyId = __builtin_ctzll(pressedKeys);
-            on_keyPress(keybed_idx, keyId);
+            if (on_keyPress != nullptr) {
+                on_keyPress(keybed_idx, keyId);
+            }
             // Clear the least significant set bit
             pressedKeys &= (pressedKeys - 1);
         }
 
         while (releasedKeys != 0) {
             keyId = __builtin_ctzll(releasedKeys);
-            on_keyUp(keybed_idx, keyId);
+            if (on_keyUp != nullptr) {
+                on_keyUp(keybed_idx, keyId);
+            }
             releasedKeys &= (releasedKeys - 1);
         }
 

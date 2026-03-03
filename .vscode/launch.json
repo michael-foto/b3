@@ -12,11 +12,11 @@
             "type": "platformio-debug",
             "request": "launch",
             "name": "PIO Debug",
-            "executable": "D:/Repos/b3/.pio/build/teensy36/firmware.elf",
-            "projectEnvName": "teensy36",
+            "executable": "D:/Repos/b3/.pio/build/teensy35/firmware.elf",
+            "projectEnvName": "teensy35",
             "toolchainBinDir": "C:/Users/mjfot/.platformio/packages/toolchain-gccarmnoneeabi-teensy/bin",
             "internalConsoleOptions": "openOnSessionStart",
-            "svdPath": "C:/Users/mjfot/.platformio/platforms/teensy/misc/svd/MK66F18.svd",
+            "svdPath": "C:/Users/mjfot/.platformio/platforms/teensy/misc/svd/MK64F12.svd",
             "preLaunchTask": {
                 "type": "PlatformIO",
                 "task": "Pre-Debug"
@@ -26,21 +26,21 @@
             "type": "platformio-debug",
             "request": "launch",
             "name": "PIO Debug (skip Pre-Debug)",
-            "executable": "D:/Repos/b3/.pio/build/teensy36/firmware.elf",
-            "projectEnvName": "teensy36",
+            "executable": "D:/Repos/b3/.pio/build/teensy35/firmware.elf",
+            "projectEnvName": "teensy35",
             "toolchainBinDir": "C:/Users/mjfot/.platformio/packages/toolchain-gccarmnoneeabi-teensy/bin",
             "internalConsoleOptions": "openOnSessionStart",
-            "svdPath": "C:/Users/mjfot/.platformio/platforms/teensy/misc/svd/MK66F18.svd"
+            "svdPath": "C:/Users/mjfot/.platformio/platforms/teensy/misc/svd/MK64F12.svd"
         },
         {
             "type": "platformio-debug",
             "request": "launch",
             "name": "PIO Debug (without uploading)",
-            "executable": "D:/Repos/b3/.pio/build/teensy36/firmware.elf",
-            "projectEnvName": "teensy36",
+            "executable": "D:/Repos/b3/.pio/build/teensy35/firmware.elf",
+            "projectEnvName": "teensy35",
             "toolchainBinDir": "C:/Users/mjfot/.platformio/packages/toolchain-gccarmnoneeabi-teensy/bin",
             "internalConsoleOptions": "openOnSessionStart",
-            "svdPath": "C:/Users/mjfot/.platformio/platforms/teensy/misc/svd/MK66F18.svd",
+            "svdPath": "C:/Users/mjfot/.platformio/platforms/teensy/misc/svd/MK64F12.svd",
             "loadMode": "manual"
         }
     ]

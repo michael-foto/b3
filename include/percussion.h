@@ -7,13 +7,13 @@
 
 #define POLLING_INTERVAL (100)
 
-class Drawbars : public ISystem {
+class Percussion : public ISystem {
   public:
-    Drawbars() : ISystem() {
-      Organ::drawbars_init();
+    Percussion() : ISystem() {
+      Organ::percussion_init();
     };
 
-    /// @brief Read the drawbar MUX channels and set the drawbar values
+    /// @brief Read the percussion switches 
     void update() {
         // if the polling interval is exceeded then repoll
         if (millis >= POLLING_INTERVAL) {

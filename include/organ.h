@@ -11,6 +11,8 @@
 #include <SPI.h>
 #include <bitset>
 
+#define DEBUG
+
 #ifdef DEBUG
 #define DEBUG_PRINT(x) Serial.print(x)
 #define DEBUG_PRINTLN(x) Serial.println(x)
@@ -28,6 +30,7 @@
 #define DRAWBAR_UPPER_PIN (A1)
 #define DRAWBAR_MUX_PIN0 (0)
 #define LATCH_PIN (18)
+#define LATCH_PIN_I (21)
 
 #define PERCUSSION_ON_PIN (7)
 #define PERCUSSION_VOL_PIN (6)
@@ -88,8 +91,8 @@ typedef struct {
     boolean isStopped;
 } Leslie;
 
-std::array<uint64_t, NUM_KEYBEDS> current_key_state = {0x0};
-std::array<uint16_t, NUM_DRAWBARS> current_drawbar_state = {0x0};
+std::array<uint64_t, NUM_KEYBEDS> current_key_state = {0x0, 0x0};
+std::array<uint16_t, NUM_DRAWBARS> current_drawbar_state = {0x0, 0x0};
 
 boolean keybed_initialised = false;
 
@@ -107,11 +110,13 @@ void serial_init() {
 }
 
 void keybed_init() {
+    DEBUG_PRINTLN("inside :: keybed_init");
     if (keybed_initialised) {
         return;
     }
 
     pinMode(LATCH_PIN, OUTPUT);
+    pinMode(LATCH_PIN_I, OUTPUT);
     pinMode(SCK, OUTPUT);
     pinMode(MOSI, OUTPUT);
     pinMode(MISO, INPUT_PULLDOWN);
@@ -129,6 +134,7 @@ void drawbars_init() {
     pinMode(DRAWBAR_MUX_PIN0, OUTPUT);
     pinMode(DRAWBAR_MUX_PIN0 + 1, OUTPUT);
     pinMode(DRAWBAR_MUX_PIN0 + 2, OUTPUT);
+    pinMode(DRAWBAR_MUX_PIN0 + 3, OUTPUT);
 }
 
 void percussion_init() {
@@ -153,22 +159,45 @@ void leslie_init() {
     pinMode(LESLIE_STOP_OUT_PIN, OUTPUT);
 }
 
+/**
+ * The top keybed has a bad hardware implementation meaning custom
+ * mapping is needed. This implementation is hardware specific
+ * and will not apply to other keybeds
+ */
+uint8_t map_keybed_keys(uint8_t col, uint8_t row) {
+    // TODO: fix in hardware by re-soldering.
+    // The top keybed's row matrix is out of order.
+    // It goes 3 4 5 0 1 2. So this handles that case
+    bool is_top_row = col / NUM_COLS;
+    char parsed_row = is_top_row ? (row + 3) % 6 : row;
+
+    char new_key = ((col * NUM_ROWS) + parsed_row);
+    // keybed skips 101 - 106
+    if (new_key > 100) {
+        new_key = new_key - 7;
+    }
+    return (is_top_row ? new_key - 65 : new_key);
+}
+
 void SPI_update_key_state() {
     // two keybeds
-    std::array<uint64_t, NUM_KEYBEDS> keybed = {0x0};
+    std::array<uint64_t, NUM_KEYBEDS> keybed = {0x0, 0x0};
 
-    for (int row = 0; row < NUM_ROWS; row++) {
+    // number of bytes needed to store the data (add 7 so that we round up)
+    const int num_bytes = ((NUM_COLS * NUM_KEYBEDS) + 7) / 8;
+
+    for (char row = 0; row < NUM_ROWS; row++) {
         // write to the HC595
         digitalWriteFast(LATCH_PIN, LOW);
+        digitalWriteFast(LATCH_PIN_I, HIGH);
         SPI.transfer(1 << row);
         digitalWriteFast(LATCH_PIN, HIGH);
+        digitalWriteFast(LATCH_PIN_I, LOW);
         // allow time for the data to be written to the 165s register
-        delayMicroseconds(1);
+        delayMicroseconds(10);
         // latch data
         digitalWriteFast(LATCH_PIN, LOW);
-
-        // number of bytes needed to store the data (add 7 so that we round up)
-        int num_bytes = ((NUM_COLS * NUM_KEYBEDS) + 7) / 8;
+        digitalWriteFast(LATCH_PIN_I, HIGH);
 
         /*
          * Read the SPI bus one byte at a time and write 1s for the pressed
@@ -177,41 +206,44 @@ void SPI_update_key_state() {
          * We have to multiply by NUM_ROWS to get the corresponding key.
          * I.e. key = COL * NUM_ROWS + ROW.
          */
-        for (char i = 0; i < num_bytes; i++) {
+        for (char i = num_bytes; i > 0; i--) {
             uint8_t data = SPI.transfer(0x0);
+            // DEBUG_PRINT(std::bitset<8>(data).to_string().c_str());
+
             while (data != 0) {
                 // first index of set bit
                 char idx = __builtin_ctzll(data);
-                char col = (idx + (i * 8));
+                char col = (idx + ((i - 1) * 8));
+
+                char key_number = map_keybed_keys(col, row);
+
                 // Set the keybed for the corresponding byte
-                keybed[col / NUM_COLS] |= 0x1 << ((col * NUM_ROWS) + row);
+                keybed[col / NUM_COLS] |= 1ULL << key_number;
                 // unset the idx bit
                 data &= (data - 1);
             }
         }
-
-        // just debug the top keybed
-        DEBUG_PRINT(std::bitset<64>(keybed[0]).to_string().c_str());
     }
-    DEBUG_PRINTLN();
     current_key_state = keybed;
 }
+
 
 void read_drawbars() {
     for (uint8_t i = 0; i < 9; i++) {
         // encode the select pin
-        digitalWrite(DRAWBAR_MUX_PIN0 + 0, (i >> 3) & 1);
-        digitalWrite(DRAWBAR_MUX_PIN0 + 1, (i >> 2) & 1);
-        digitalWrite(DRAWBAR_MUX_PIN0 + 2, (i >> 1) & 1);
-        digitalWrite(DRAWBAR_MUX_PIN0 + 3, (i >> 0) & 1);
+        digitalWrite(DRAWBAR_MUX_PIN0 + 0, (i >> 0) & 1);
+        digitalWrite(DRAWBAR_MUX_PIN0 + 1, (i >> 1) & 1);
+        digitalWrite(DRAWBAR_MUX_PIN0 + 2, (i >> 2) & 1);
+        digitalWrite(DRAWBAR_MUX_PIN0 + 3, (i >> 3) & 1);
         delayMicroseconds(100);
 
         // write the raw value into the array
-        current_drawbar_state[i] = analogRead(DRAWBAR_LOWER_PIN);
-        current_drawbar_state[i + 9] = analogRead(DRAWBAR_UPPER_PIN);
+        current_drawbar_state[i * 2] = analogRead(DRAWBAR_UPPER_PIN);
+        current_drawbar_state[(i * 2) + 1] = analogRead(DRAWBAR_LOWER_PIN);
 
-        DEBUG_PRINT("drawbar raw values: ");
-        DEBUG_PRINT(value >> 7);
+        DEBUG_PRINT(current_drawbar_state[i * 2] >> 7);
+        DEBUG_PRINT(", ");
+        DEBUG_PRINT(current_drawbar_state[(i * 2) + 1] >> 7);
         DEBUG_PRINT(", ");
     }
     DEBUG_PRINTLN();
