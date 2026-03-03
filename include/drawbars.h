@@ -35,7 +35,7 @@ class Drawbars : public ISystem {
     std::array<uint16_t, 10> lower = {0};
 
   private:
-    int millis = DRAWBAR_POLLING_INTERVAL;
+    elapsedMillis millis = DRAWBAR_POLLING_INTERVAL;
     void (*on_drawbar_change)() = nullptr;
 
     void handle_drawbar_change() {

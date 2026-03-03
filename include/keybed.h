@@ -10,7 +10,7 @@
 #include <ISystem.h>
 #include <organ.h>
 
-#define KEYBED_POLLING_INTERVAL (10)
+#define KEYBED_POLLING_INTERVAL (0)
 
 class Keybed : public ISystem {
   public:
@@ -29,6 +29,7 @@ class Keybed : public ISystem {
     /// to the previous, and dispatch messages to the keybed's subscribers as
     /// required
     void update() {
+        // // DEBUG_PRINTLN("Inside :: Keybed::update");
         // if the polling interval is exceeded then re-read the keybeds
         if (millis >= KEYBED_POLLING_INTERVAL) {
             Organ::SPI_update_key_state();
@@ -36,6 +37,7 @@ class Keybed : public ISystem {
         }
         // always handle state change comparing global to local
         handle_key_state_change();
+        // DEBUG_PRINTLN("Exiting :: Keybed::update");
     }
 
     /// @brief Fires the callback when a key is pressed
@@ -58,6 +60,7 @@ class Keybed : public ISystem {
     void (*on_keyUp)(uint8_t keybed_idx, uint8_t key) = nullptr;
 
     void handle_key_state_change() {
+        // DEBUG_PRINTLN("Inside :: Keybed::handle_key_state_change");
         // first find the keys that have changed
         uint64_t pressedKeys = Organ::current_key_state[keybed_idx] & ~keybed_state;
         uint64_t releasedKeys = keybed_state & ~Organ::current_key_state[keybed_idx];
@@ -86,6 +89,7 @@ class Keybed : public ISystem {
 
         // update the local state now
         keybed_state = Organ::current_key_state[keybed_idx];
+        // DEBUG_PRINTLN("Inside :: Keybed::handle_key_state_change");
     }
 };
 

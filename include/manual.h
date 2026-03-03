@@ -318,8 +318,8 @@ float remap(float v, float oldmin, float oldmax, float newmin, float newmax) {
 
 // manual_fill_volumes returns the current set of tonewheel volumes,
 // with values in the Q14 range. keys is an array of 61 keys on a
-// manual, zero indexed and nonzero if pressed. drawbars contains the
-// resistance at each of the 9 drawbars, also zero indexed.
+// manual, one-indexed and nonzero if pressed. drawbars contains the
+// resistance at each of the 9 drawbars, also one-indexed.
 //
 // drawbars[1]: 16' (sub-octave)
 // drawbars[2]: 5 1/3' (5th)
@@ -330,7 +330,8 @@ float remap(float v, float oldmin, float oldmax, float newmin, float newmax) {
 // drawbars[7]: 1 3/5' (15th)
 // drawbars[8]: 1 1/3' (19th)
 // drawbars[9]: 1' (22nd)
-uint32_t manual_fill_volumes(uint64_t keys, uint8_t drawbars[10], uint16_t ret[92]) {
+uint32_t manual_fill_volumes(uint64_t keys, uint16_t drawbars[10], uint16_t ret[92]) {
+
     float drawvols[] = {0, 1.414, 2, 2.828, 5, 5.657, 8, 11.31, 16};
 
     // The total possible gain per tonewheel, if all keys are down and
@@ -338,14 +339,14 @@ uint32_t manual_fill_volumes(uint64_t keys, uint8_t drawbars[10], uint16_t ret[9
     float totals[92] = {0};
 
     float gains[92] = {0};
-    for (int k = 1; k < 62; k++) {
+    for (int k = 0; k < 61; k++) {
         for (int d = 1; d < 10; d++) {
-            int t = tonewheel(k, d);
+            int t = tonewheel(k + 1, d);
             totals[t] += drawvols[8];
-            if (keys & (1ULL << k) == 0 || drawbars[d] / 32 == 0) {
+            if ((keys & (1ULL << k)) == 0 || drawbars[d] >> 7 == 0) {
                 continue;
             }
-            gains[t] += drawvols[drawbars[d] / 32];
+            gains[t] += drawvols[drawbars[d] >> 7];
         }
     }
 
@@ -365,6 +366,12 @@ uint32_t manual_fill_volumes(uint64_t keys, uint8_t drawbars[10], uint16_t ret[9
         total += v;
         ret[t] = (uint16_t)v;
     }
+    // DEBUG_PRINT("volumes :: ");
+    // for (int i = 0; i < 92; i++) {
+    //     DEBUG_PRINT(ret[i]);
+    //     DEBUG_PRINT(", ");
+    // }
+    // DEBUG_PRINTLN();
     return total;
 }
 
