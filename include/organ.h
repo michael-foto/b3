@@ -91,8 +91,14 @@ typedef struct {
     boolean isStopped;
 } Leslie;
 
+/// @brief current key state for top and bottom keybeds. 64-bit integer
+/// MSB-first, where the first bit responds to the first key, up to 61st bit
+/// for the last key. 1 is pressed, 0 is released
 std::array<uint64_t, NUM_KEYBEDS> current_key_state = {0x0, 0x0};
-std::array<uint16_t, NUM_DRAWBARS> current_drawbar_state = {0x0, 0x0};
+
+/// @brief current drawbar levels from 0-7. 0-indexed. first 9 are for the top 
+/// manual, 2nd 9 for the bottom
+std::array<uint8_t, NUM_DRAWBARS> current_drawbar_state = {0x0, 0x0};
 
 boolean keybed_initialised = false;
 
@@ -106,11 +112,11 @@ uint8_t percussion_drawbars[10] = {0};
 uint16_t percussion_volumes[92] = {0};
 
 void serial_init() {
-    Serial.begin(9600);
+    Serial.begin(1000);
 }
 
 void keybed_init() {
-    DEBUG_PRINTLN("inside :: keybed_init");
+    // DEBUG_PRINTLN("inside :: keybed_init");
     if (keybed_initialised) {
         return;
     }
@@ -180,6 +186,7 @@ uint8_t map_keybed_keys(uint8_t col, uint8_t row) {
 }
 
 void SPI_update_key_state() {
+    // DEBUG_PRINTLN("Inside :: Keybed::SPI_update_key_state");
     // two keybeds
     std::array<uint64_t, NUM_KEYBEDS> keybed = {0x0, 0x0};
 
@@ -225,8 +232,17 @@ void SPI_update_key_state() {
         }
     }
     current_key_state = keybed;
+    // DEBUG_PRINTLN("Exiting :: Keybed::SPI_update_key_state");
 }
 
+/// @brief mapping to take analog value of the drawbar sliders to a value in 
+/// the range 0-7.
+/// @param raw_value the raw analog value
+/// @return the drawbar volume level from 0-7
+uint8_t quantize_drawbars(uint16_t raw_value) {
+    // drawbars are reversed
+    return min((0x400 - raw_value) / 113, 8);
+}
 
 void read_drawbars() {
     for (uint8_t i = 0; i < 9; i++) {
@@ -238,16 +254,11 @@ void read_drawbars() {
         delayMicroseconds(100);
 
         // write the raw value into the array
-        current_drawbar_state[i * 2] = analogRead(DRAWBAR_UPPER_PIN);
-        current_drawbar_state[(i * 2) + 1] = analogRead(DRAWBAR_LOWER_PIN);
-
-        DEBUG_PRINT(current_drawbar_state[i * 2] >> 7);
-        DEBUG_PRINT(", ");
-        DEBUG_PRINT(current_drawbar_state[(i * 2) + 1] >> 7);
-        DEBUG_PRINT(", ");
+        current_drawbar_state[17 - (i * 2)] = quantize_drawbars(analogRead(DRAWBAR_UPPER_PIN));
+        current_drawbar_state[16 - (i * 2)] = quantize_drawbars(analogRead(DRAWBAR_LOWER_PIN));
     }
-    DEBUG_PRINTLN();
 }
+
 
 void read_percussion() {
 }

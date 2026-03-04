@@ -23,29 +23,28 @@ Vibrato upperVibrato;
 Vibrato lowerVibrato;
 
 AudioConnection patchCord0(tonewheels, 0, tonewheelsMonitor, 0);
-// AudioConnection patchCord1(tonewheelsMonitor, 0, antialias, 0);
-AudioConnection patchCord2(upperVibrato, 0, lowerVibrato, 0);
-AudioConnection patchCord3(lowerVibrato, 0, organOut, 0);
+AudioConnection patchCord1(tonewheelsMonitor, 0, organOut, 0);
+AudioConnection patchCord2(upperVibrato, 0, organOut, 1);
+AudioConnection patchCord3(lowerVibrato, 0, organOut, 2);
 
 TonewheelOsc percussion;
 AudioEffectEnvelope percussionEnv;
 
 AudioConnection patchCord4(percussion, 0, percussionEnv, 0);
-AudioConnection patchCord5(percussionEnv, 0, organOut, 1);
+AudioConnection patchCord5(percussionEnv, 0, organOut, 3);
 
 AudioAmplifier swell;
-AudioConnection patchCord6(organOut, 0, swell, 0);
+AudioConnection patchCord6(organOut, swell);
 
 // This antialias filter is here to band limit the organ signal, in
 // case key click transients are too high frequency, and also to give
 // a slight reduction in key click.
 AudioFilterBiquad antialias;
-// AudioConnection patchCord7(tonewheelsMonitor, 0, antialias, 0);
-// AudioConnection patchCord7(swell, 0, antialias, 0);
+AudioConnection patchCord7(swell, antialias);
 
 // Teensy DAC output
 AudioOutputAnalog dac;
-AudioConnection patchCord8(tonewheelsMonitor, dac);
+AudioConnection patchCord8(swell, dac);
 #pragma endregion
 
 std::vector<ISystem *> systems;
@@ -318,7 +317,7 @@ void DEBUG_statusPerc() {
 
 void setup() {
     Organ::serial_init();
-    AudioMemory(4);
+    AudioMemory(5);
 
     upperKeybed = new Keybed(1);
     upperKeybed->setHandleKeyPressed(handleNoteOn);
@@ -373,10 +372,10 @@ void loop() {
     // updateVibrato();
 
     // TODO: move this to percussion system
-    updatePercussionEnvelope();
+    // updatePercussionEnvelope();
 
     // Dump debug messages every 500000 loop iterations
-    if ((count++ % 50000) == 0) {
+    if ((count++ % 500000) == 0) {
         DEBUG_status();
         DEBUG_statusVolume();
     }

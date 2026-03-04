@@ -330,7 +330,7 @@ float remap(float v, float oldmin, float oldmax, float newmin, float newmax) {
 // drawbars[7]: 1 3/5' (15th)
 // drawbars[8]: 1 1/3' (19th)
 // drawbars[9]: 1' (22nd)
-uint32_t manual_fill_volumes(uint64_t keys, uint16_t drawbars[10], uint16_t ret[92]) {
+uint32_t manual_fill_volumes(uint64_t keys, uint8_t drawbars[10], uint16_t ret[92]) {
 
     float drawvols[] = {0, 1.414, 2, 2.828, 5, 5.657, 8, 11.31, 16};
 
@@ -343,10 +343,14 @@ uint32_t manual_fill_volumes(uint64_t keys, uint16_t drawbars[10], uint16_t ret[
         for (int d = 1; d < 10; d++) {
             int t = tonewheel(k + 1, d);
             totals[t] += drawvols[8];
-            if ((keys & (1ULL << k)) == 0 || drawbars[d] >> 7 == 0) {
+            if ((keys & (1ULL << k)) == 0 || drawbars[d] == 0) {
                 continue;
             }
-            gains[t] += drawvols[drawbars[d] >> 7];
+            DEBUG_PRINT("drawbar no :: ");
+            DEBUG_PRINT(d);
+            DEBUG_PRINT(" level :: ");
+            DEBUG_PRINTLN(drawbars[d]);
+            gains[t] += drawvols[drawbars[d]];
         }
     }
 

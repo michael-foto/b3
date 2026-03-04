@@ -10,7 +10,7 @@
 #include <ISystem.h>
 #include <organ.h>
 
-#define KEYBED_POLLING_INTERVAL (0)
+#define KEYBED_POLLING_INTERVAL (8)
 
 class Keybed : public ISystem {
   public:
@@ -66,6 +66,9 @@ class Keybed : public ISystem {
         uint64_t releasedKeys = keybed_state & ~Organ::current_key_state[keybed_idx];
         int keyId;
 
+        // update the local state before calling the hooks
+        keybed_state = Organ::current_key_state[keybed_idx];
+
         // variation of Brian Kernighan's algorithm to get the indices of set bits.
         // These correspond to the currently pressed keys
         // We do this twice for the pressed keys, and the released keys
@@ -86,9 +89,6 @@ class Keybed : public ISystem {
             }
             releasedKeys &= (releasedKeys - 1);
         }
-
-        // update the local state now
-        keybed_state = Organ::current_key_state[keybed_idx];
         // DEBUG_PRINTLN("Inside :: Keybed::handle_key_state_change");
     }
 };
