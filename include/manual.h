@@ -14,6 +14,8 @@
 // resistances of each drawbar setting, and the factory recommended
 // voltage from each tonewheel.
 
+#define VOL_Q19 (1U << 19)
+
 // resistance & friends return the resistance of the wire (in ohms)
 // connected to the tonewheel for key + drawbar.
 float resistance(int key, int drawbar);
@@ -316,6 +318,18 @@ float remap(float v, float oldmin, float oldmax, float newmin, float newmax) {
     return newmin + (v - oldmin) * (newmax - newmin) / (oldmax - oldmin);
 }
 
+static const uint32_t draw_gain_q19[9] = {
+    0,    // level 0
+    298,  // 1.414 * VOL_Q19 / sum
+    421,  // 2.0
+    596,  // 2.828
+    1057, // 5.0
+    1195, // 5.657
+    1690, // 8.0
+    2390, // 11.31
+    3392  // 16.0
+};
+
 // manual_fill_volumes returns the current set of tonewheel volumes,
 // with values in the Q14 range. keys is an array of 61 keys on a
 // manual, one-indexed and nonzero if pressed. drawbars contains the
@@ -330,52 +344,46 @@ float remap(float v, float oldmin, float oldmax, float newmin, float newmax) {
 // drawbars[7]: 1 3/5' (15th)
 // drawbars[8]: 1 1/3' (19th)
 // drawbars[9]: 1' (22nd)
-uint32_t manual_fill_volumes(uint64_t keys, uint8_t drawbars[10], uint16_t ret[92]) {
-
-    float drawvols[] = {0, 1.414, 2, 2.828, 5, 5.657, 8, 11.31, 16};
-
-    // The total possible gain per tonewheel, if all keys are down and
-    // all the stops are out.
-    float totals[92] = {0};
-
-    float gains[92] = {0};
-    for (int k = 0; k < 61; k++) {
-        for (int d = 1; d < 10; d++) {
-            int t = tonewheel(k + 1, d);
-            totals[t] += drawvols[8];
-            if ((keys & (1ULL << k)) == 0 || drawbars[d] == 0) {
-                continue;
-            }
-            DEBUG_PRINT("drawbar no :: ");
-            DEBUG_PRINT(d);
-            DEBUG_PRINT(" level :: ");
-            DEBUG_PRINTLN(drawbars[d]);
-            gains[t] += drawvols[drawbars[d]];
-        }
-    }
-
-    float sum = 0;
-    for (int t = 1; t < 92; t++) {
-        sum += totals[t];
-    }
-
-    // Normalize gains to set the range of the oscillator to 0.0 .. 1.0
+uint32_t manual_fill_volumes(uint64_t keys, uint8_t drawbars[10], uint32_t ret[92]) {
     uint32_t total = 0;
-    for (int t = 0; t < 92; t++) {
-        if (gains[t] == 0) {
-            ret[t] = 0;
+
+    // Clear output volumes
+    // memset(ret, 0, sizeof(uint32_t) * 92);
+
+    for (int k = 0; k < 61; k++) {
+        if (!(keys & (1ULL << k)))
             continue;
+
+        for (int d = 1; d < 10; d++) {
+            uint8_t level = drawbars[d];
+            if (!level)
+                continue;
+
+            int t = tonewheel(k + 1, d); // map key+drawbar to tonewheel index
+
+            uint32_t v = ret[t] + draw_gain_q19[level];
+            if (v > VOL_Q19)
+                v = VOL_Q19;
+
+            ret[t] += v;
+            total += v;
         }
-        uint32_t v = (uint32_t)remap(gains[t], 0, sum, (float)(1 << 11), (float)(1 << 18));
-        total += v;
-        ret[t] = (uint16_t)v;
     }
-    // DEBUG_PRINT("volumes :: ");
-    // for (int i = 0; i < 92; i++) {
-    //     DEBUG_PRINT(ret[i]);
-    //     DEBUG_PRINT(", ");
-    // }
-    // DEBUG_PRINTLN();
+    DEBUG_PRINT("volumes :: ");
+    for (int i = 0; i < 92; i++) {
+        DEBUG_PRINT(ret[i]);
+        DEBUG_PRINT(", ");
+    }
+    
+    // normalise volume output based on total;
+    if (total <= VOL_Q19)
+        return total;
+
+    // scale down proportionally
+    for (int t = 0; t < 92; t++) {
+        ret[t] = (uint32_t)(((uint64_t)ret[t] * VOL_Q19) / total);
+    }
+
     return total;
 }
 

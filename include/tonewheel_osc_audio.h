@@ -28,7 +28,7 @@ class TonewheelOsc : public AudioStream {
         release(block);
     }
 
-    void setVolumes(uint16_t volumes[92]) {
+    void setVolumes(uint32_t volumes[92]) {
         for (int i = 1; i < 92; i++) {
             tonewheel_osc_set_volume(osc, i, volumes[i]);
         }

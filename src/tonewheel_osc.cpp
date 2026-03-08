@@ -126,7 +126,7 @@ uint32_t freq_incr15(float freq) {
     return (uint32_t)(freq * 0.74304 + 0.5);
 }
 
-void tonewheel_osc_set_volume(tonewheel_osc *osc, uint8_t tonewheel, uint16_t volume) {
+void tonewheel_osc_set_volume(tonewheel_osc *osc, uint8_t tonewheel, uint32_t volume) {
     if (tonewheel > 0 && tonewheel < 92) {
         osc->volumes[tonewheel] = volume;
     }
@@ -142,7 +142,7 @@ void tonewheel_osc_fill(tonewheel_osc *osc, int16_t *block, size_t block_len) {
     for (int i = 13; i < 92; i++) {
         phase = osc->phases[i];
         phase_incr = osc->phase_incrs[i];
-        volume = (uint32_t)osc->volumes[i];
+        volume = osc->volumes[i];
 
         if (volume == 0) {
             continue;

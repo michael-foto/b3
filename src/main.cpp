@@ -44,7 +44,7 @@ AudioConnection patchCord7(swell, antialias);
 
 // Teensy DAC output
 AudioOutputAnalog dac;
-AudioConnection patchCord8(swell, dac);
+AudioConnection patchCord8(antialias, dac);
 #pragma endregion
 
 std::vector<ISystem *> systems;
@@ -123,6 +123,10 @@ void updateTonewheelVolumes() {
             Organ::percussion_drawbars[4] = 8;
         }
     }
+
+    // clear the arrays
+    memset(Organ::percussion_volumes, 0, sizeof Organ::percussion_volumes);
+    memset(Organ::tonewheel_volumes, 0, sizeof Organ::tonewheel_volumes);
 
     // Percussion only functions for the upper keybed
     manual_fill_volumes(upperKeybed->keybed_state, Organ::percussion_drawbars, Organ::percussion_volumes);

@@ -107,9 +107,9 @@ Vibrato lower_vibrato = {VibratoMode::V1, false, 1};
 Percussion percussion = {};
 Leslie leslie = {Speed::Slow, true};
 
-uint16_t tonewheel_volumes[92] = {0};
+uint32_t tonewheel_volumes[92] = {0};
 uint8_t percussion_drawbars[10] = {0};
-uint16_t percussion_volumes[92] = {0};
+uint32_t percussion_volumes[92] = {0};
 
 void serial_init() {
     Serial.begin(1000);
