@@ -14,7 +14,7 @@
 // resistances of each drawbar setting, and the factory recommended
 // voltage from each tonewheel.
 
-#define VOL_Q19 (1U << 19)
+#define MAX_TONEWHEEL_VOLUME (1U << 15)
 
 // resistance & friends return the resistance of the wire (in ohms)
 // connected to the tonewheel for key + drawbar.
@@ -314,13 +314,9 @@ float resistance9(int key) {
     }
 }
 
-float remap(float v, float oldmin, float oldmax, float newmin, float newmax) {
-    return newmin + (v - oldmin) * (newmax - newmin) / (oldmax - oldmin);
-}
-
 static const uint32_t draw_gain_q19[9] = {
     0,    // level 0
-    298,  // 1.414 * VOL_Q19 / sum
+    298,  // 1.414
     421,  // 2.0
     596,  // 2.828
     1057, // 5.0
@@ -344,47 +340,29 @@ static const uint32_t draw_gain_q19[9] = {
 // drawbars[7]: 1 3/5' (15th)
 // drawbars[8]: 1 1/3' (19th)
 // drawbars[9]: 1' (22nd)
-uint32_t manual_fill_volumes(uint64_t keys, uint8_t drawbars[10], uint32_t ret[92]) {
-    uint32_t total = 0;
-
-    // Clear output volumes
-    // memset(ret, 0, sizeof(uint32_t) * 92);
-
+void manual_fill_volumes(uint64_t keys, uint8_t drawbars[10], uint32_t ret[92]) {
     for (int k = 0; k < 61; k++) {
-        if (!(keys & (1ULL << k)))
+        if (!(keys & (1ULL << k))) {
             continue;
+        }
 
         for (int d = 1; d < 10; d++) {
             uint8_t level = drawbars[d];
-            if (!level)
+            if (!level) {
                 continue;
+            }
 
             int t = tonewheel(k + 1, d); // map key+drawbar to tonewheel index
 
+            // prevent overflow
             uint32_t v = ret[t] + draw_gain_q19[level];
-            if (v > VOL_Q19)
-                v = VOL_Q19;
-
             ret[t] += v;
-            total += v;
+            if (ret[t] > (MAX_TONEWHEEL_VOLUME)) {
+                ret[t] = MAX_TONEWHEEL_VOLUME;
+            }
         }
     }
-    DEBUG_PRINT("volumes :: ");
-    for (int i = 0; i < 92; i++) {
-        DEBUG_PRINT(ret[i]);
-        DEBUG_PRINT(", ");
-    }
-    
-    // normalise volume output based on total;
-    if (total <= VOL_Q19)
-        return total;
-
-    // scale down proportionally
-    for (int t = 0; t < 92; t++) {
-        ret[t] = (uint32_t)(((uint64_t)ret[t] * VOL_Q19) / total);
-    }
-
-    return total;
+    return;
 }
 
 #endif
