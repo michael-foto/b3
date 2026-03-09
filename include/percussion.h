@@ -46,7 +46,7 @@ class Percussion : public ISystem {
             DEBUG_PRINT("percussion speed change:: ");
             DEBUG_PRINTLN((int)Organ::current_percussion_state.speed);
             change = true;
-            Organ::current_percussion_state.speed = speed;
+            speed = Organ::current_percussion_state.speed;
         } else if (Organ::current_percussion_state.type != type) {
             DEBUG_PRINT("percussion harmonic change:: ");
             DEBUG_PRINTLN((int)Organ::current_percussion_state.type);

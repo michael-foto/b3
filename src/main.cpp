@@ -82,8 +82,6 @@ VibratoSystem *vibrato;
 
 void update_tonewheels() {
     if (percussion_system->on) {
-        // disable drawbar 9 on the upper manual if percussion is on
-        drawbars->upper[9] = 0;
         if (percussion_system->type == Organ::PercussionHarmonic::Third) {
             Organ::percussion_drawbars[5] = 8;
         } else {

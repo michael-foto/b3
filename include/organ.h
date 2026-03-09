@@ -56,7 +56,7 @@ enum class Speed {
 
 enum class PercussionVolume {
     Soft,
-    Loud
+    Normal
 };
 
 enum class PercussionHarmonic {
@@ -255,10 +255,19 @@ void read_drawbars() {
         // write the raw value into the array
         current_drawbar_state[17 - (i * 2)] = quantize_drawbars(analogRead(DRAWBAR_UPPER_PIN));
         current_drawbar_state[16 - (i * 2)] = quantize_drawbars(analogRead(DRAWBAR_LOWER_PIN));
+
+        // disable the 9th drawbar if percussion is on
+        if (current_percussion_state.on) {
+            current_drawbar_state[8] = 0;
+        }
     }
 }
 
 void read_percussion() {
+    current_percussion_state.on = digitalRead(PERCUSSION_ON_PIN) == 1;
+    current_percussion_state.volume = digitalRead(PERCUSSION_VOL_PIN) ? PercussionVolume::Soft : PercussionVolume::Normal;
+    current_percussion_state.speed = digitalRead(PERCUSSION_SPEED_PIN) ? Speed::Fast : Speed::Slow;
+    current_percussion_state.type = digitalRead(PERCUSSION_HARMONIC_PIN) ? PercussionHarmonic::Third : PercussionHarmonic::Second;
 }
 
 void read_vibrato() {
