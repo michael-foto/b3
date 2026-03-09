@@ -9,6 +9,9 @@
 #include "drawbars.h"
 #include "keybed.h"
 #include "manual.h"
+#include "percussion.h"
+#include "vibrato_system.h"
+
 #include "monitor_audio.h"
 #include "tonewheel_osc_audio.h"
 #include "vibrato_audio.h"
@@ -23,28 +26,29 @@ Vibrato upperVibrato;
 Vibrato lowerVibrato;
 
 AudioConnection patchCord0(tonewheels, 0, tonewheelsMonitor, 0);
-AudioConnection patchCord1(tonewheelsMonitor, 0, organOut, 0);
-AudioConnection patchCord2(upperVibrato, 0, organOut, 1);
-AudioConnection patchCord3(lowerVibrato, 0, organOut, 2);
+AudioConnection patchCord1(tonewheelsMonitor, 0, upperVibrato, 0);
+AudioConnection patchCord2(tonewheelsMonitor, 0, lowerVibrato, 0);
+AudioConnection patchCord3(upperVibrato, 0, organOut, 0);
+AudioConnection patchCord4(lowerVibrato, 0, organOut, 1);
 
 TonewheelOsc percussion;
 AudioEffectEnvelope percussionEnv;
 
-AudioConnection patchCord4(percussion, 0, percussionEnv, 0);
-AudioConnection patchCord5(percussionEnv, 0, organOut, 3);
+AudioConnection patchCord5(percussion, 0, percussionEnv, 0);
+AudioConnection patchCord6(percussionEnv, 0, organOut, 2);
 
 AudioAmplifier swell;
-AudioConnection patchCord6(organOut, swell);
+AudioConnection patchCord7(organOut, swell);
 
 // This antialias filter is here to band limit the organ signal, in
 // case key click transients are too high frequency, and also to give
 // a slight reduction in key click.
 AudioFilterBiquad antialias;
-AudioConnection patchCord7(swell, antialias);
+AudioConnection patchCord8(swell, antialias);
 
 // Teensy DAC output
 AudioOutputAnalog dac;
-AudioConnection patchCord8(antialias, dac);
+AudioConnection patchCord9(antialias, dac);
 #pragma endregion
 
 std::vector<ISystem *> systems;
@@ -52,6 +56,8 @@ std::vector<ISystem *> systems;
 Keybed *upperKeybed;
 Keybed *lowerKeybed;
 Drawbars *drawbars;
+Percussion *percussion_system;
+VibratoSystem *vibrato;
 
 // TODO later: add MIDI out via USB
 // MIDI key values
@@ -73,51 +79,12 @@ Drawbars *drawbars;
 #define CC_VIBRATO (107)
 #define CC_SPEAKER_DRIVE (111)
 
-// void updateVibrato() {
-//     // uint8_t mode = Organ::upper_vibrato
-//     if (mode == 0) {
-//         vibrato.setMode(V1);
-//     } else if (mode <= 26) {
-//         vibrato.setMode(C1);
-//     } else if (mode <= 51) {
-//         vibrato.setMode(V2);
-//     } else if (mode <= 84) {
-//         vibrato.setMode(C2);
-//     } else if (mode <= 102) {
-//         vibrato.setMode(V3);
-//     } else if (mode <= 127) {
-//         vibrato.setMode(C3);
-//     }
 
-//     if (!midiControl[CC_VIBRATO]) {
-//         vibrato.setMode(Off);
-//     }
-// }
-
-void updatePercussionEnvelope() {
-    percussionEnv.delay(0.0);
-    percussionEnv.attack(0.1);
-    percussionEnv.sustain(0.0);
-    percussionEnv.release(0.0);
-
-    if (Organ::percussion.speed == Organ::Speed::Fast) {
-        percussionEnv.decay(300.0);
-    } else {
-        percussionEnv.decay(630.0);
-    }
-
-    if (Organ::percussion.volume == Organ::PercussionVolume::Soft) {
-        organOut.gain(1, 0.25);
-    } else {
-        organOut.gain(1, 0.50);
-    }
-}
-
-void updateTonewheelVolumes() {
-    if (Organ::percussion.on) {
+void update_tonewheels() {
+    if (percussion_system->on) {
         // disable drawbar 9 on the upper manual if percussion is on
         drawbars->upper[9] = 0;
-        if (Organ::percussion.type == Organ::PercussionHarmonic::Third) {
+        if (percussion_system->type == Organ::PercussionHarmonic::Third) {
             Organ::percussion_drawbars[5] = 8;
         } else {
             Organ::percussion_drawbars[4] = 8;
@@ -139,7 +106,28 @@ void updateTonewheelVolumes() {
     tonewheels.setVolumes(Organ::tonewheel_volumes);
 }
 
-void handleNoteOn(uint8_t keybed_idx, uint8_t key) {
+void handle_percussion_change() {
+    percussionEnv.delay(0.0);
+    percussionEnv.attack(0.1);
+    percussionEnv.sustain(0.0);
+    percussionEnv.release(0.0);
+
+    if (percussion_system->speed == Organ::Speed::Fast) {
+        percussionEnv.decay(300.0);
+    } else {
+        percussionEnv.decay(630.0);
+    }
+
+    if (percussion_system->volume == Organ::PercussionVolume::Soft) {
+        organOut.gain(2, 0.25);
+    } else {
+        organOut.gain(2, 0.50);
+    }
+
+    update_tonewheels();
+}
+
+void handle_note_on(uint8_t keybed_idx, uint8_t key) {
     DEBUG_PRINT("keybed: ");
     DEBUG_PRINT(keybed_idx);
     DEBUG_PRINT(", Key pressed: ");
@@ -150,19 +138,19 @@ void handleNoteOn(uint8_t keybed_idx, uint8_t key) {
         return;
     }
 
-    updateTonewheelVolumes();
+    update_tonewheels();
 
     // Top keyboard only
     if (keybed_idx == 0 &&
         // current key state has not been updated to the new state yet.
         // I.e., if this is 0, then this is the first keypress
         Organ::current_key_state[keybed_idx] == 0 &&
-        Organ::percussion.on) {
+        percussion_system->on) {
         percussionEnv.noteOn();
     }
 }
 
-void handleNoteOff(uint8_t keybed_idx, uint8_t key) {
+void handle_note_off(uint8_t keybed_idx, uint8_t key) {
     DEBUG_PRINT("keybed: ");
     DEBUG_PRINT(keybed_idx);
     DEBUG_PRINT(", Key released: ");
@@ -173,14 +161,14 @@ void handleNoteOff(uint8_t keybed_idx, uint8_t key) {
         return;
     }
 
-    updateTonewheelVolumes();
+    update_tonewheels();
 
     // Top keyboard only
     if (keybed_idx == 0 &&
         // current key state has not been updated to the new state yet.
         // I.e., if this is a power of two then only one key was pressed - it must have been released
         (Organ::current_key_state[keybed_idx] & (Organ::current_key_state[keybed_idx] - 1)) &&
-        Organ::percussion.on) {
+        percussion_system->on) {
         percussionEnv.noteOff();
     }
 }
@@ -207,14 +195,14 @@ void handleControlChange(byte chan, byte ctrl, byte val) {
     if (ctrl == CC_SWELL) {
         swell.gain(remap((float)val, 0, 127, 0, 2.5));
     } else if (ctrl == CC_PERCUSSION) {
-        updatePercussionEnvelope();
-        updateTonewheelVolumes();
+        handle_percussion_change();
+        update_tonewheels();
     } else if (ctrl == CC_PERCUSSION_FAST) {
-        updatePercussionEnvelope();
+        handle_percussion_change();
     } else if (ctrl == CC_PERCUSSION_SOFT) {
-        updatePercussionEnvelope();
+        handle_percussion_change();
     } else if (ctrl > CC_DRAWBAR_0 && ctrl <= CC_DRAWBAR_9) {
-        updateTonewheelVolumes();
+        update_tonewheels();
     } else if (ctrl == CC_ROTARY_STOP || ctrl == CC_ROTARY_SPEED) {
         updateLeslieRotation();
     } else if (ctrl == CC_VIBRATO || ctrl == CC_VIBRATO_MODE) {
@@ -324,22 +312,26 @@ void setup() {
     AudioMemory(5);
 
     upperKeybed = new Keybed(1);
-    upperKeybed->setHandleKeyPressed(handleNoteOn);
-    upperKeybed->setHandleKeyReleased(handleNoteOff);
+    upperKeybed->setHandleKeyPressed(handle_note_on);
+    upperKeybed->setHandleKeyReleased(handle_note_off);
     systems.push_back(upperKeybed);
 
     lowerKeybed = new Keybed(0);
-    lowerKeybed->setHandleKeyPressed(handleNoteOn);
-    lowerKeybed->setHandleKeyReleased(handleNoteOff);
+    lowerKeybed->setHandleKeyPressed(handle_note_on);
+    lowerKeybed->setHandleKeyReleased(handle_note_off);
     systems.push_back(lowerKeybed);
 
     drawbars = new Drawbars();
-    drawbars->setOnDrawbarChange(updateTonewheelVolumes);
+    drawbars->setOnDrawbarChange(update_tonewheels);
     systems.push_back(drawbars);
 
-    // TODO: create classes for this (systems)
-    // Organ::percussion_init();
-    // Organ::vibrato_init();
+    percussion_system = new Percussion();
+    percussion_system->setOnpercussionChange(handle_percussion_change);
+    systems.push_back(percussion_system);
+
+    vibrato = new VibratoSystem();
+    vibrato->setOnvibratoChange(update_tonewheels);
+    systems.push_back(vibrato);
 
     tonewheels.init();
     percussion.init();
@@ -348,10 +340,9 @@ void setup() {
 
     swell.gain(1.0);
 
-    organOut.gain(0, 0.50); // tonewheels + vibrato
-    organOut.gain(1, 0.50); // percussionEnv
-    organOut.gain(2, 0);
-    organOut.gain(3, 0);
+    organOut.gain(0, 0.5);  // tonewheels + upper vibrato
+    organOut.gain(1, 0.5);  // tonewheels + lower vibrato
+    organOut.gain(2, 0.50); // percussionEnv
 
     // The antialias filter is here for two purposes:
     //
@@ -360,7 +351,11 @@ void setup() {
     //
     // 2) To cut the transients when turning on new tonewheels,
     // reducing key click.
+    //
+    // 3) to normalise the loudness of the higher tonewheels for
+    // a more balanced output
     antialias.setLowpass(0, 2150, 0.707);
+    // antialias.setLowpass(1, 1025, 0.5);
 }
 
 int count = 0;
@@ -370,13 +365,6 @@ void loop() {
     for (const auto &system : systems) {
         system->update();
     }
-
-    // Poll the switches
-    // TODO: move this to vibrato system
-    // updateVibrato();
-
-    // TODO: move this to percussion system
-    // updatePercussionEnvelope();
 
     // Dump debug messages every 500000 loop iterations
     if ((count++ % 500000) == 0) {

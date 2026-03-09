@@ -73,10 +73,10 @@ typedef struct {
 
 enum class VibratoMode {
     V1 = 1,
-    V2,
-    V3,
     C1,
+    V2,
     C2,
+    V3,
     C3,
 };
 
@@ -96,16 +96,15 @@ typedef struct {
 /// for the last key. 1 is pressed, 0 is released
 std::array<uint64_t, NUM_KEYBEDS> current_key_state = {0x0, 0x0};
 
-/// @brief current drawbar levels from 0-7. 0-indexed. first 9 are for the top 
+/// @brief current drawbar levels from 0-7. 0-indexed. first 9 are for the top
 /// manual, 2nd 9 for the bottom
 std::array<uint8_t, NUM_DRAWBARS> current_drawbar_state = {0x0, 0x0};
 
 boolean keybed_initialised = false;
 
-Vibrato upper_vibrato = {VibratoMode::V1, false, 1};
-Vibrato lower_vibrato = {VibratoMode::V1, false, 1};
-Percussion percussion = {};
-Leslie leslie = {Speed::Slow, true};
+Vibrato current_vibrato_state = {VibratoMode::C1, false, false};
+Percussion current_percussion_state = {};
+Leslie current_leslie_state = {Speed::Slow, true};
 
 uint32_t tonewheel_volumes[92] = {0};
 uint8_t percussion_drawbars[10] = {0};
@@ -235,7 +234,7 @@ void SPI_update_key_state() {
     // DEBUG_PRINTLN("Exiting :: Keybed::SPI_update_key_state");
 }
 
-/// @brief mapping to take analog value of the drawbar sliders to a value in 
+/// @brief mapping to take analog value of the drawbar sliders to a value in
 /// the range 0-7.
 /// @param raw_value the raw analog value
 /// @return the drawbar volume level from 0-7
@@ -259,19 +258,38 @@ void read_drawbars() {
     }
 }
 
-
 void read_percussion() {
 }
 
 void read_vibrato() {
+    current_vibrato_state.upper = digitalRead(VIBRATO_UPPER_PIN);
+    current_vibrato_state.lower = digitalRead(VIBRATO_LOWER_PIN);
+
+    uint16_t raw = analogRead(VIBRATO_SELECT_PIN);
+    Organ::VibratoMode mode;
+
+    if (raw > 1000) {
+        mode = Organ::VibratoMode::C1;
+    } else if (raw > 800) {
+        mode = Organ::VibratoMode::C3;
+    } else if (raw > 600) {
+        mode = Organ::VibratoMode::V3;
+    } else if (raw > 400) {
+        mode = Organ::VibratoMode::C2;
+    } else if (raw > 200) {
+        mode = Organ::VibratoMode::V2;
+    } else {
+        mode = Organ::VibratoMode::V1;
+    }
+    current_vibrato_state.mode = mode;
 }
 
 void read_leslie() {
 }
 
 void write_leslie_output() {
-    digitalWrite(LESLIE_STOP_OUT_PIN, leslie.isStopped);
-    digitalWrite(LESLIE_SPEED_OUT_PIN, leslie.leslieSpeed == Speed::Fast ? 1 : 0);
+    digitalWrite(LESLIE_STOP_OUT_PIN, current_leslie_state.isStopped);
+    digitalWrite(LESLIE_SPEED_OUT_PIN, current_leslie_state.leslieSpeed == Speed::Fast ? 1 : 0);
 }
 
 }; // namespace Organ

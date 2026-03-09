@@ -1,64 +1,71 @@
-#ifndef DRAWBARS_H
-#define DRAWBARS_H
+#ifndef PERCUSSION_H
+#define PERCUSSION_H
 
 #include <Arduino.h>
 #include <ISystem.h>
 #include <organ.h>
 
-#define POLLING_INTERVAL (100)
+#define PERCUSSION_POLLING_INTERVAL (100)
 
 class Percussion : public ISystem {
   public:
     Percussion() : ISystem() {
-      Organ::percussion_init();
+        Organ::percussion_init();
     };
 
-    /// @brief Read the percussion switches 
+    /// @brief Read the percussion switches
     void update() {
         // if the polling interval is exceeded then repoll
-        if (millis >= POLLING_INTERVAL) {
-            Organ::read_drawbars();
+        if (millis >= PERCUSSION_POLLING_INTERVAL) {
+            Organ::read_percussion();
             millis = 0;
         }
         // always handle state change comparing global to local
-        handle_drawbar_change();
+        handle_percussion_change();
     }
 
     /// @brief
-    /// @param callback a function that takes the drawbar number (1-indexed) and the value (0-8)
-    void setOnDrawbarChange(void (*callback)()) {
-        on_drawbar_change = callback;
+    /// @param callback a function that takes the percussion number (1-indexed) and the value (0-8)
+    void setOnpercussionChange(void (*callback)()) {
+        on_percussion_change = callback;
     }
 
-    uint8_t upper[10] = {0};
-    uint8_t lower[10] = {0};
+    Organ::Speed speed;
+    Organ::PercussionHarmonic type;
+    Organ::PercussionVolume volume;
+    boolean on;
 
   private:
-    elapsedMillis millis = POLLING_INTERVAL;
-    void (*on_drawbar_change)() = nullptr;
+    elapsedMillis millis = PERCUSSION_POLLING_INTERVAL;
+    void (*on_percussion_change)() = nullptr;
 
-    void handle_drawbar_change() {
-        boolean upper_changed = false;
-        boolean lower_changed = false;
-        uint8_t new_state;
-        for (uint8_t i = 1; i <= 9; i++) {
-            if (upper[i] != Organ::current_drawbar_state[i - 1]) {
-                upper_changed = true;
-            }
-            // because drawbars are 1-indexed, but hardware is 0-indexed
-            if (lower[i] != Organ::current_drawbar_state[i + 9 - 1]) {
-                lower_changed = true;
-            }
+    void handle_percussion_change() {
+        bool change = false;
+
+        if (Organ::current_percussion_state.speed != speed) {
+            DEBUG_PRINT("percussion speed change:: ");
+            DEBUG_PRINTLN((int)Organ::current_percussion_state.speed);
+            change = true;
+            Organ::current_percussion_state.speed = speed;
+        } else if (Organ::current_percussion_state.type != type) {
+            DEBUG_PRINT("percussion harmonic change:: ");
+            DEBUG_PRINTLN((int)Organ::current_percussion_state.type);
+            change = true;
+            type = Organ::current_percussion_state.type;
+        } else if (Organ::current_percussion_state.volume != volume) {
+            DEBUG_PRINT("percussion volume change :: ");
+            DEBUG_PRINTLN((int)Organ::current_percussion_state.volume);
+            change = true;
+            volume = Organ::current_percussion_state.volume;
+        } else if (Organ::current_percussion_state.on != on) {
+            DEBUG_PRINT("percussion change :: ");
+            DEBUG_PRINTLN(Organ::current_percussion_state.on ? "on" : "off");
+            change = true;
+            on = Organ::current_percussion_state.on;
         }
 
-        // fill values into the local state
-        if (upper_changed) {
-            std::copy(&Organ::current_drawbar_state, &Organ::current_drawbar_state + 9, upper + 1);
-            on_drawbar_change();
-        }
-        if (lower_changed) {
-            std::copy(&Organ::current_drawbar_state + 9, &Organ::current_drawbar_state + 18, lower + 1);
-            on_drawbar_change();
+        if (on_percussion_change != nullptr && change) {
+            on_percussion_change();
         }
     }
 };
