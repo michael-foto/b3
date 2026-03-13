@@ -211,8 +211,7 @@ void manual_fill_volumes(uint64_t keys, uint8_t drawbars[10], uint32_t ret[92]) 
             int t = tonewheel(k + 1, d); // map key+drawbar to tonewheel index
 
             // prevent overflow
-            uint32_t v = ret[t] + draw_gain_q19[level];
-            ret[t] += v;
+            ret[t] += ret[t] + draw_gain_q19[level];
             if (ret[t] > (MAX_TONEWHEEL_VOLUME)) {
                 ret[t] = MAX_TONEWHEEL_VOLUME;
             }

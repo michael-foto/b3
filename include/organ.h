@@ -106,7 +106,8 @@ Vibrato current_vibrato_state = {VibratoMode::C1, false, false};
 Percussion current_percussion_state = {};
 Leslie current_leslie_state = {Speed::Slow, true};
 
-uint32_t tonewheel_volumes[92] = {0};
+uint32_t upper_tonewheel_volumes[92] = {0};
+uint32_t lower_tonewheel_volumes[92] = {0};
 uint8_t percussion_drawbars[10] = {0};
 uint32_t percussion_volumes[92] = {0};
 

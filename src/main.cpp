@@ -22,13 +22,12 @@
 AudioMixer4 organOut;
 TonewheelOsc tonewheels;
 Monitor tonewheelsMonitor;
-Vibrato upperVibrato;
-Vibrato lowerVibrato;
+Vibrato vibrato;
 
 AudioConnection patchCord0(tonewheels, 0, tonewheelsMonitor, 0);
-AudioConnection patchCord1(tonewheelsMonitor, 0, upperVibrato, 0);
+AudioConnection patchCord1(tonewheelsMonitor, 0, vibrato, 0);
 AudioConnection patchCord2(tonewheelsMonitor, 0, lowerVibrato, 0);
-AudioConnection patchCord3(upperVibrato, 0, organOut, 0);
+AudioConnection patchCord3(vibrato, 0, organOut, 0);
 AudioConnection patchCord4(lowerVibrato, 0, organOut, 1);
 
 TonewheelOsc percussion;
@@ -57,7 +56,7 @@ Keybed *upperKeybed;
 Keybed *lowerKeybed;
 Drawbars *drawbars;
 Percussion *percussion_system;
-VibratoSystem *vibrato;
+VibratoSystem *vibrato_system;
 
 // TODO later: add MIDI out via USB
 // MIDI key values
@@ -79,7 +78,6 @@ VibratoSystem *vibrato;
 #define CC_VIBRATO (107)
 #define CC_SPEAKER_DRIVE (111)
 
-
 void update_tonewheels() {
     if (percussion_system->on) {
         if (percussion_system->type == Organ::PercussionHarmonic::Third) {
@@ -91,17 +89,28 @@ void update_tonewheels() {
 
     // clear the arrays
     memset(Organ::percussion_volumes, 0, sizeof Organ::percussion_volumes);
-    memset(Organ::tonewheel_volumes, 0, sizeof Organ::tonewheel_volumes);
+    memset(Organ::upper_tonewheel_volumes, 0, sizeof Organ::lower_tonewheel_volumes);
 
     // Percussion only functions for the upper keybed
     manual_fill_volumes(upperKeybed->keybed_state, Organ::percussion_drawbars, Organ::percussion_volumes);
     percussion.setVolumes(Organ::percussion_volumes);
 
-    manual_fill_volumes(upperKeybed->keybed_state, drawbars->upper.data(), Organ::tonewheel_volumes);
-    tonewheels.setVolumes(Organ::tonewheel_volumes);
+    // reset the current tonewheel volumes
+    tonewheels.clear();
 
-    manual_fill_volumes(lowerKeybed->keybed_state, drawbars->lower.data(), Organ::tonewheel_volumes);
-    tonewheels.setVolumes(Organ::tonewheel_volumes);
+    manual_fill_volumes(upperKeybed->keybed_state, drawbars->upper.data(), Organ::upper_tonewheel_volumes);
+    if (vibrato_system->upper) {
+        tonewheels.setVibratoVolumes(Organ::upper_tonewheel_volumes);
+    } else {
+        tonewheels.setVolumes(Organ::upper_tonewheel_volumes);
+    }
+
+    manual_fill_volumes(lowerKeybed->keybed_state, drawbars->lower.data(), Organ::lower_tonewheel_volumes);
+    if (vibrato_system->lower) {
+        tonewheels.setVibratoVolumes(Organ::lower_tonewheel_volumes);
+    } else {
+        tonewheels.setVolumes(Organ::lower_tonewheel_volumes);
+    }
 }
 
 void handle_percussion_change() {
@@ -239,9 +248,9 @@ void DEBUG_status() {
     Serial.print("  ");
 
     Serial.print("upper vibrato=");
-    Serial.print(upperVibrato.processorUsage());
+    Serial.print(vibrato.processorUsage());
     Serial.print(",");
-    Serial.print(upperVibrato.processorUsageMax());
+    Serial.print(vibrato.processorUsageMax());
     Serial.print("  ");
 
     Serial.print("lower vibrato=");
@@ -327,13 +336,13 @@ void setup() {
     percussion_system->setOnpercussionChange(handle_percussion_change);
     systems.push_back(percussion_system);
 
-    vibrato = new VibratoSystem();
-    vibrato->setOnvibratoChange(update_tonewheels);
-    systems.push_back(vibrato);
+    vibrato_system = new VibratoSystem();
+    vibrato_system->setOnvibratoChange(update_tonewheels);
+    systems.push_back(vibrato_system);
 
     tonewheels.init();
     percussion.init();
-    upperVibrato.init();
+    vibrato.init();
     lowerVibrato.init();
 
     swell.gain(1.0);

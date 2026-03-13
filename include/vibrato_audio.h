@@ -30,7 +30,7 @@ class Vibrato : public AudioStream {
         }
 
         scan_phase = 0;
-        setMode(Organ::VibratoMode::C1);
+        setMode(Organ::VibratoMode::V1);
     }
 
     void setMode(Organ::VibratoMode mode) {

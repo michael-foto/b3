@@ -126,32 +126,34 @@ uint32_t freq_incr15(float freq) {
     return (uint32_t)(freq * 0.74304 + 0.5);
 }
 
-void tonewheel_osc_set_volume(tonewheel_osc *osc, uint8_t tonewheel, uint32_t volume) {
-    if (tonewheel > 0 && tonewheel < 92) {
-        osc->volumes[tonewheel] = volume;
-    }
+void tonewheel_osc_set_volume(uint32_t osc_volumes[92], uint8_t tonewheel, uint32_t volume) {
+        osc_volumes[tonewheel] += volume;
 }
 
-void tonewheel_osc_fill(tonewheel_osc *osc, int16_t *block, size_t block_len) {
-    memset(block, 0, sizeof(int16_t) * block_len);
+void tonewheel_osc_fill(tonewheel_osc *osc, int16_t *vibrato_block, int16_t *raw_block, size_t block_len) {
+    memset(vibrato_block, 0, sizeof(int16_t) * block_len);
+    memset(raw_block, 0, sizeof(int16_t) * block_len);
 
     uint32_t phase;
     uint32_t phase_incr;
-    uint32_t volume;
+    uint32_t vibrato_volume;
+    uint32_t raw_volume;
 
     for (int i = 13; i < 92; i++) {
         phase = osc->phases[i];
         phase_incr = osc->phase_incrs[i];
-        volume = osc->volumes[i];
+        vibrato_volume = osc->vibrato_volumes[i];
+        raw_volume = osc->raw_volumes[i];
 
-        if (volume == 0) {
+        if (vibrato_volume == 0 && raw_volume == 0) {
             continue;
         }
 
         for (size_t j = 0; j < block_len; j++) {
             phase += phase_incr;
             // isin_S4 is Q12; volume is Q19
-            block[j] += (isin_S4(phase) * volume) >> 15;
+            vibrato_block[j] += (isin_S4(phase) * vibrato_volume) >> 15;
+            raw_block[j] += (isin_S4(phase) * raw_volume) >> 15;
         }
         osc->phases[i] = phase;
     }
