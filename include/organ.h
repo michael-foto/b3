@@ -173,7 +173,7 @@ uint8_t map_keybed_keys(uint8_t col, uint8_t row) {
     char new_key = ((col * NUM_ROWS) + parsed_row);
     // keybed skips 101 - 106
     if (new_key > 100) {
-        new_key = new_key - 7;
+        new_key = new_key - 6;
     }
     return (is_top_row ? new_key - 65 : new_key);
 }
