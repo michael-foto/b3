@@ -8,9 +8,9 @@
 
 #include "drawbars.h"
 #include "keybed.h"
+#include "leslie.h"
 #include "manual.h"
 #include "percussion.h"
-#include "leslie.h"
 #include "vibrato_system.h"
 
 #include "monitor_audio.h"
@@ -21,15 +21,19 @@
 
 #pragma region Audio Connections
 AudioMixer4 organOut;
+// combined raw and vibrato tonewheel signals
+AudioMixer4 tonewheels_mix;
 TonewheelOsc tonewheels;
 Monitor tonewheelsMonitor;
 Vibrato vibrato;
 
-AudioConnection patchCord0(tonewheels, 0, tonewheelsMonitor, 0);
-AudioConnection patchCord1(tonewheelsMonitor, 0, vibrato, 0);
-AudioConnection patchCord2(tonewheelsMonitor, 0, lowerVibrato, 0);
-AudioConnection patchCord3(vibrato, 0, organOut, 0);
-AudioConnection patchCord4(lowerVibrato, 0, organOut, 1);
+AudioConnection patchCord0(tonewheels, tonewheels_mix);
+AudioConnection patchCord1(tonewheels_mix, tonewheelsMonitor);
+
+AudioConnection patchCord2(tonewheels, 0, organOut, 0);
+
+AudioConnection patchCord3(tonewheels, 1, vibrato, 0);
+AudioConnection patchCord4(vibrato, 0, organOut, 1);
 
 TonewheelOsc percussion;
 AudioEffectEnvelope percussionEnv;
@@ -57,7 +61,7 @@ Keybed *upperKeybed;
 Keybed *lowerKeybed;
 Drawbars *drawbars;
 Percussion *percussion_system;
-VibratoSystem *vibrato;
+VibratoSystem *vibrato_system;
 Leslie *leslie;
 
 // TODO later: add MIDI out via USB
@@ -81,6 +85,11 @@ Leslie *leslie;
 #define CC_SPEAKER_DRIVE (111)
 
 void update_tonewheels() {
+    // reset percussion
+    for (uint8_t i = 0; i < 9; i++) {
+        Organ::percussion_drawbars[i] = 0;
+    }
+
     if (percussion_system->on) {
         if (percussion_system->type == Organ::PercussionHarmonic::Third) {
             Organ::percussion_drawbars[5] = 8;
@@ -89,16 +98,19 @@ void update_tonewheels() {
         }
     }
 
+    // reset the current tonewheel volumes
+    tonewheels.clear();
+    percussion.clear();
+
     // clear the arrays
     memset(Organ::percussion_volumes, 0, sizeof Organ::percussion_volumes);
-    memset(Organ::upper_tonewheel_volumes, 0, sizeof Organ::lower_tonewheel_volumes);
+    memset(Organ::upper_tonewheel_volumes, 0, sizeof Organ::upper_tonewheel_volumes);
+    memset(Organ::lower_tonewheel_volumes, 0, sizeof Organ::lower_tonewheel_volumes);
 
     // Percussion only functions for the upper keybed
     manual_fill_volumes(upperKeybed->keybed_state, Organ::percussion_drawbars, Organ::percussion_volumes);
+    DEBUG_PRINTLN(upperKeybed->keybed_state);
     percussion.setVolumes(Organ::percussion_volumes);
-
-    // reset the current tonewheel volumes
-    tonewheels.clear();
 
     manual_fill_volumes(upperKeybed->keybed_state, drawbars->upper.data(), Organ::upper_tonewheel_volumes);
     if (vibrato_system->upper) {
@@ -150,10 +162,9 @@ void handle_note_on(uint8_t keybed_idx, uint8_t key) {
     update_tonewheels();
 
     // Top keyboard only
-    if (keybed_idx == 0 &&
-        // current key state has not been updated to the new state yet.
-        // I.e., if this is 0, then this is the first keypress
-        Organ::current_key_state[keybed_idx] == 0 &&
+    if (keybed_idx == 1 &&
+        // If current key state is a power of 2, only one key is pressed
+        (Organ::current_key_state[keybed_idx] & (Organ::current_key_state[keybed_idx] - 1)) == 0 &&
         percussion_system->on) {
         percussionEnv.noteOn();
     }
@@ -173,10 +184,9 @@ void handle_note_off(uint8_t keybed_idx, uint8_t key) {
     update_tonewheels();
 
     // Top keyboard only
-    if (keybed_idx == 0 &&
-        // current key state has not been updated to the new state yet.
-        // I.e., if this is a power of two then only one key was pressed - it must have been released
-        (Organ::current_key_state[keybed_idx] & (Organ::current_key_state[keybed_idx] - 1)) &&
+    if (keybed_idx == 1 &&
+        // I.e., if this is 0, all keys released
+        Organ::current_key_state[keybed_idx] == 0 &&
         percussion_system->on) {
         percussionEnv.noteOff();
     }
@@ -249,16 +259,10 @@ void DEBUG_status() {
     Serial.print(tonewheels.processorUsageMax());
     Serial.print("  ");
 
-    Serial.print("upper vibrato=");
+    Serial.print("vibrato=");
     Serial.print(vibrato.processorUsage());
     Serial.print(",");
     Serial.print(vibrato.processorUsageMax());
-    Serial.print("  ");
-
-    Serial.print("lower vibrato=");
-    Serial.print(lowerVibrato.processorUsage());
-    Serial.print(",");
-    Serial.print(lowerVibrato.processorUsageMax());
     Serial.print("  ");
 
     Serial.print("antialias=");
@@ -339,7 +343,7 @@ void setup() {
     systems.push_back(percussion_system);
 
     vibrato_system = new VibratoSystem();
-    vibrato_system->setOnvibratoChange(update_tonewheels);
+    vibrato_system->set_on_vibrato_change(update_tonewheels);
     systems.push_back(vibrato_system);
 
     leslie = new Leslie();
@@ -349,7 +353,6 @@ void setup() {
     tonewheels.init();
     percussion.init();
     vibrato.init();
-    lowerVibrato.init();
 
     swell.gain(1.0);
 
@@ -367,8 +370,8 @@ void setup() {
     //
     // 3) to normalise the loudness of the higher tonewheels for
     // a more balanced output
-    antialias.setLowpass(0, 2150, 0.707);
-    // antialias.setLowpass(1, 1025, 0.5);
+    antialias.setLowpass(0, 1000, 0.707);
+    // antialias.setLowpass(1, 3000, 0.707);
 }
 
 int count = 0;

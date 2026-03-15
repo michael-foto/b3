@@ -6,8 +6,14 @@
 #include <Audio.h>
 #include "tonewheel_osc.h"
 
-// TonewheelOsc is a Teensy AudioStream wrapper around the
-// tonewheel_osc oscillator block.
+/**
+ * TonewheelOsc is a Teensy AudioStream wrapper around the tonewheel_osc
+ * oscillator block.
+ * It splits the tonewheel output based on which tonewheels should pass through
+ * the vibrato line (upper/lower) and which should be clean
+ * Channel 0 - raw signal
+ * Channel 1 - vibrato signal
+ */
 class TonewheelOsc : public AudioStream {
   public:
     TonewheelOsc() : AudioStream(0, NULL) {

@@ -9,6 +9,10 @@ extern "C" {
 
 #include "tonewheel_osc.h"
 
+#ifndef MAX_TONEWHEEL_VOLUME
+#define MAX_TONEWHEEL_VOLUME (1U << 15)
+#endif
+
 uint32_t freq_incr15(float freq);
 int32_t isin_S3(int32_t x);
 int32_t isin_S4(int32_t x);
@@ -127,7 +131,10 @@ uint32_t freq_incr15(float freq) {
 }
 
 void tonewheel_osc_set_volume(uint32_t osc_volumes[92], uint8_t tonewheel, uint32_t volume) {
-        osc_volumes[tonewheel] += volume;
+    osc_volumes[tonewheel] += volume;
+    if (osc_volumes[tonewheel] > (MAX_TONEWHEEL_VOLUME)) {
+        osc_volumes[tonewheel] = MAX_TONEWHEEL_VOLUME;
+    }
 }
 
 void tonewheel_osc_fill(tonewheel_osc *osc, int16_t *vibrato_block, int16_t *raw_block, size_t block_len) {
