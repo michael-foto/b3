@@ -42,13 +42,13 @@ class Keybed : public ISystem {
 
     /// @brief Fires the callback when a key is pressed
     /// @param callback function when a key press is triggered
-    void setHandleKeyPressed(void (*callback)(uint8_t keybed_idx, uint8_t key)) {
+    void set_handle_key_pressed(void (*callback)(uint8_t keybed_idx, uint8_t key)) {
         on_keyPress = callback;
     }
 
     /// @brief Fires the callback when a key is pressed
     /// @param callback function when a key is released
-    void setHandleKeyReleased(void (*callback)(uint8_t keybed_idx, uint8_t key)) {
+    void set_handle_key_released(void (*callback)(uint8_t keybed_idx, uint8_t key)) {
         on_keyUp = callback;
     }
 

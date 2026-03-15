@@ -157,13 +157,6 @@ void vibrato_init() {
     pinMode(VIBRATO_LOWER_PIN, INPUT_PULLUP);
 }
 
-void leslie_init() {
-    pinMode(ROTO_FAST_PIN, INPUT_PULLUP);
-    pinMode(ROTO_SLOW_PIN, INPUT_PULLUP);
-    pinMode(LESLIE_SPEED_OUT_PIN, OUTPUT);
-    pinMode(LESLIE_STOP_OUT_PIN, OUTPUT);
-}
-
 /**
  * The top keybed has a bad hardware implementation meaning custom
  * mapping is needed. This implementation is hardware specific
@@ -294,11 +287,27 @@ void read_vibrato() {
 }
 
 void read_leslie() {
+    uint8_t fast = !digitalRead(ROTO_FAST_PIN);
+    uint8_t slow = !digitalRead(ROTO_SLOW_PIN);
+
+    current_leslie_state.isStopped = !(fast || slow);
+    current_leslie_state.leslieSpeed = fast ? Speed::Fast : Speed::Slow;
 }
 
 void write_leslie_output() {
-    digitalWrite(LESLIE_STOP_OUT_PIN, current_leslie_state.isStopped);
+    digitalWrite(LESLIE_STOP_OUT_PIN, !current_leslie_state.isStopped);
     digitalWrite(LESLIE_SPEED_OUT_PIN, current_leslie_state.leslieSpeed == Speed::Fast ? 1 : 0);
+}
+
+void leslie_init() {
+    pinMode(ROTO_FAST_PIN, INPUT_PULLUP);
+    pinMode(ROTO_SLOW_PIN, INPUT_PULLUP);
+    pinMode(LESLIE_SPEED_OUT_PIN, OUTPUT);
+    pinMode(LESLIE_STOP_OUT_PIN, OUTPUT);
+
+    read_leslie();
+    delayMicroseconds(100);
+    write_leslie_output();
 }
 
 }; // namespace Organ

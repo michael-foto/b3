@@ -27,7 +27,7 @@ class VibratoSystem : public ISystem {
 
     /// @brief
     /// @param callback a function to run on change of the vibrato state
-    void setOnvibratoChange(void (*callback)()) {
+    void set_on_vibrato_change(void (*callback)()) {
         on_vibrato_change = callback;
     }
 
