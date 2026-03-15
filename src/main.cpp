@@ -10,6 +10,7 @@
 #include "keybed.h"
 #include "manual.h"
 #include "percussion.h"
+#include "leslie.h"
 #include "vibrato_system.h"
 
 #include "monitor_audio.h"
@@ -56,7 +57,8 @@ Keybed *upperKeybed;
 Keybed *lowerKeybed;
 Drawbars *drawbars;
 Percussion *percussion_system;
-VibratoSystem *vibrato_system;
+VibratoSystem *vibrato;
+Leslie *leslie;
 
 // TODO later: add MIDI out via USB
 // MIDI key values
@@ -319,26 +321,30 @@ void setup() {
     AudioMemory(5);
 
     upperKeybed = new Keybed(1);
-    upperKeybed->setHandleKeyPressed(handle_note_on);
-    upperKeybed->setHandleKeyReleased(handle_note_off);
+    upperKeybed->set_handle_key_pressed(handle_note_on);
+    upperKeybed->set_handle_key_released(handle_note_off);
     systems.push_back(upperKeybed);
 
     lowerKeybed = new Keybed(0);
-    lowerKeybed->setHandleKeyPressed(handle_note_on);
-    lowerKeybed->setHandleKeyReleased(handle_note_off);
+    lowerKeybed->set_handle_key_pressed(handle_note_on);
+    lowerKeybed->set_handle_key_released(handle_note_off);
     systems.push_back(lowerKeybed);
 
     drawbars = new Drawbars();
-    drawbars->setOnDrawbarChange(update_tonewheels);
+    drawbars->set_on_drawbar_change(update_tonewheels);
     systems.push_back(drawbars);
 
     percussion_system = new Percussion();
-    percussion_system->setOnpercussionChange(handle_percussion_change);
+    percussion_system->set_on_percussion_change(handle_percussion_change);
     systems.push_back(percussion_system);
 
     vibrato_system = new VibratoSystem();
     vibrato_system->setOnvibratoChange(update_tonewheels);
     systems.push_back(vibrato_system);
+
+    leslie = new Leslie();
+    leslie->set_on_leslie_change(Organ::write_leslie_output);
+    systems.push_back(leslie);
 
     tonewheels.init();
     percussion.init();

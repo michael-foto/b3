@@ -26,7 +26,7 @@ class Percussion : public ISystem {
 
     /// @brief
     /// @param callback a function that takes the percussion number (1-indexed) and the value (0-8)
-    void setOnpercussionChange(void (*callback)()) {
+    void set_on_percussion_change(void (*callback)()) {
         on_percussion_change = callback;
     }
 

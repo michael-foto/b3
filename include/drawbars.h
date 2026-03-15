@@ -27,7 +27,7 @@ class Drawbars : public ISystem {
 
     /// @brief
     /// @param callback a function that takes the drawbar number (1-indexed) and the value (0-8)
-    void setOnDrawbarChange(void (*callback)()) {
+    void set_on_drawbar_change(void (*callback)()) {
         on_drawbar_change = callback;
     }
 
