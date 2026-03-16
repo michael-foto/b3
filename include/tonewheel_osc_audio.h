@@ -53,15 +53,23 @@ class TonewheelOsc : public AudioStream {
     }
 
     void setVolumes(uint32_t volumes[92]) {
+            // DEBUG_PRINT("NORMAL VOLS :: ");
         for (int i = 1; i < 92; i++) {
+            // DEBUG_PRINT(volumes[i]);
+            // DEBUG_PRINT(", ");
             tonewheel_osc_set_volume(osc->raw_volumes, i, volumes[i]);
         }
+        // DEBUG_PRINTLN();
     }
 
     void setVibratoVolumes(uint32_t volumes[92]) {
+            // DEBUG_PRINT("VIBRATO VOLS :: ");
         for (int i = 1; i < 92; i++) {
+        //     // DEBUG_PRINT(volumes[i]);
+        //     // DEBUG_PRINT(", ");
             tonewheel_osc_set_volume(osc->vibrato_volumes, i, volumes[i]);
         }
+        // DEBUG_PRINTLN();
     }
 
   private:

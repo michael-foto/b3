@@ -148,6 +148,11 @@ void handle_percussion_change() {
     update_tonewheels();
 }
 
+void handle_vibrato_change() {
+    vibrato.setMode(vibrato_system->mode);
+    update_tonewheels();
+}
+
 void handle_note_on(uint8_t keybed_idx, uint8_t key) {
     DEBUG_PRINT("keybed: ");
     DEBUG_PRINT(keybed_idx);
@@ -191,44 +196,6 @@ void handle_note_off(uint8_t keybed_idx, uint8_t key) {
         percussionEnv.noteOff();
     }
 }
-
-/*
-// handleControlChange is compatible (where possible) with the Nord
-// Electro 3 MIDI implementation:
-// http://www.nordkeyboards.com/sites/default/files/files/downloads/manuals/nord-electro-3/Nord%20Electro%203%20English%20User%20Manual%20v3.x%20Edition%203.1.pdf
-void handleControlChange(byte chan, byte ctrl, byte val) {
-    if (ctrl == 1) {
-        // Skip logging aftertouch messages, so the serial log isn't
-        // spammed with them.
-        return;
-    }
-
-    Serial.print("Control Change, ch=");
-    Serial.print(chan, DEC);
-    Serial.print(", control=");
-    Serial.print(ctrl, DEC);
-    Serial.print(", value=");
-    Serial.print(val, DEC);
-    Serial.println();
-
-    if (ctrl == CC_SWELL) {
-        swell.gain(remap((float)val, 0, 127, 0, 2.5));
-    } else if (ctrl == CC_PERCUSSION) {
-        handle_percussion_change();
-        update_tonewheels();
-    } else if (ctrl == CC_PERCUSSION_FAST) {
-        handle_percussion_change();
-    } else if (ctrl == CC_PERCUSSION_SOFT) {
-        handle_percussion_change();
-    } else if (ctrl > CC_DRAWBAR_0 && ctrl <= CC_DRAWBAR_9) {
-        update_tonewheels();
-    } else if (ctrl == CC_ROTARY_STOP || ctrl == CC_ROTARY_SPEED) {
-        updateLeslieRotation();
-    } else if (ctrl == CC_VIBRATO || ctrl == CC_VIBRATO_MODE) {
-        updateVibrato();
-    }
-}
-*/
 
 #pragma region DEBUG
 void DEBUG_showKeys() {
@@ -301,25 +268,6 @@ void DEBUG_statusVolume() {
     tonewheelsMonitor.reset();
 }
 
-/*
-/// @brief Print volume and tonewheel status to the debug console
-void DEBUG_statusPerc() {
-    Serial.print("percOn=");
-    Serial.print(midiControl[CC_PERCUSSION]);
-    Serial.print("    ");
-    Serial.print("percFast=");
-    Serial.print(midiControl[CC_PERCUSSION_FAST]);
-    Serial.print("    ");
-    Serial.print("percSoft=");
-    Serial.print(midiControl[CC_PERCUSSION_SOFT]);
-    Serial.print("    ");
-    Serial.print("percThird=");
-    Serial.print(midiControl[CC_PERCUSSION_THIRD]);
-    Serial.print("    ");
-    Serial.println();
-}
-*/
-
 void setup() {
     Organ::serial_init();
     AudioMemory(5);
@@ -343,7 +291,7 @@ void setup() {
     systems.push_back(percussion_system);
 
     vibrato_system = new VibratoSystem();
-    vibrato_system->set_on_vibrato_change(update_tonewheels);
+    vibrato_system->set_on_vibrato_change(handle_vibrato_change);
     systems.push_back(vibrato_system);
 
     leslie = new Leslie();
@@ -356,8 +304,8 @@ void setup() {
 
     swell.gain(1.0);
 
-    organOut.gain(0, 0.5);  // tonewheels + upper vibrato
-    organOut.gain(1, 0.5);  // tonewheels + lower vibrato
+    organOut.gain(0, 0.5);  // no vibrato
+    organOut.gain(1, 0.5);  // with vibrato
     organOut.gain(2, 0.50); // percussionEnv
 
     // The antialias filter is here for two purposes:
@@ -384,7 +332,7 @@ void loop() {
 
     // Dump debug messages every 500000 loop iterations
     if ((count++ % 500000) == 0) {
-        DEBUG_status();
-        DEBUG_statusVolume();
+        // DEBUG_status();
+        // DEBUG_statusVolume();
     }
 }

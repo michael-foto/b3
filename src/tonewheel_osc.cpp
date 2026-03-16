@@ -150,7 +150,8 @@ void tonewheel_osc_fill(tonewheel_osc *osc, int16_t *vibrato_block, int16_t *raw
         phase = osc->phases[i];
         phase_incr = osc->phase_incrs[i];
         vibrato_volume = osc->vibrato_volumes[i];
-        raw_volume = osc->raw_volumes[i];
+        // if this tonewheel is owned by the vibrato circuit, don't pass a raw volume
+        raw_volume = vibrato_volume == 0 ? osc->raw_volumes[i] : 0;
 
         if (vibrato_volume == 0 && raw_volume == 0) {
             continue;
@@ -158,9 +159,9 @@ void tonewheel_osc_fill(tonewheel_osc *osc, int16_t *vibrato_block, int16_t *raw
 
         for (size_t j = 0; j < block_len; j++) {
             phase += phase_incr;
-            // isin_S4 is Q12; volume is Q19
-            vibrato_block[j] += (isin_S4(phase) * vibrato_volume) >> 15;
-            raw_block[j] += (isin_S4(phase) * raw_volume) >> 15;
+            // isin_S4 is Q12; volume is Q18
+            vibrato_block[j] += (uint64_t)(isin_S4(phase) * vibrato_volume) >> 15;
+            raw_block[j] += (uint64_t)(isin_S4(phase) * raw_volume) >> 15;
         }
         osc->phases[i] = phase;
     }

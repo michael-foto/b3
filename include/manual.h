@@ -183,7 +183,7 @@ static const uint32_t draw_gain_q19[9] = {
 };
 
 // manual_fill_volumes returns the current set of tonewheel volumes,
-// with values in the Q14 range. keys is an array of 61 keys on a
+// with values in the Q19 range. keys is an array of 61 keys on a
 // manual, one-indexed and nonzero if pressed. drawbars contains the
 // resistance at each of the 9 drawbars, also one-indexed.
 //
@@ -211,7 +211,7 @@ void manual_fill_volumes(uint64_t keys, uint8_t drawbars[10], uint32_t ret[92]) 
             int t = tonewheel(k + 1, d); // map key+drawbar to tonewheel index
 
             // prevent overflow
-            ret[t] += ret[t] + draw_gain_q19[level];
+            ret[t] += draw_gain_q19[level];
             if (ret[t] > (MAX_TONEWHEEL_VOLUME)) {
                 ret[t] = MAX_TONEWHEEL_VOLUME;
             }
