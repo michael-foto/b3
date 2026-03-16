@@ -86,9 +86,7 @@ Leslie *leslie;
 
 void update_tonewheels() {
     // reset percussion
-    for (uint8_t i = 0; i < 9; i++) {
-        Organ::percussion_drawbars[i] = 0;
-    }
+    memset(Organ::percussion_drawbars, 0, sizeof Organ::percussion_drawbars);
 
     if (percussion_system->on) {
         if (percussion_system->type == Organ::PercussionHarmonic::Third) {
@@ -140,9 +138,9 @@ void handle_percussion_change() {
     }
 
     if (percussion_system->volume == Organ::PercussionVolume::Soft) {
-        organOut.gain(2, 0.25);
+        organOut.gain(2, 1.5);
     } else {
-        organOut.gain(2, 0.50);
+        organOut.gain(2, 3);
     }
 
     update_tonewheels();
@@ -304,9 +302,9 @@ void setup() {
 
     swell.gain(1.0);
 
-    organOut.gain(0, 0.5);  // no vibrato
-    organOut.gain(1, 0.5);  // with vibrato
-    organOut.gain(2, 0.50); // percussionEnv
+    organOut.gain(0, 3); // no vibrato
+    organOut.gain(1, 3); // with vibrato
+    organOut.gain(2, 3); // percussionEnv
 
     // The antialias filter is here for two purposes:
     //

@@ -14,7 +14,7 @@
 // resistances of each drawbar setting, and the factory recommended
 // voltage from each tonewheel.
 
-#define MAX_TONEWHEEL_VOLUME (1U << 15)
+#define MAX_TONEWHEEL_VOLUME (1U << 14)
 
 // resistance & friends return the resistance of the wire (in ohms)
 // connected to the tonewheel for key + drawbar.
