@@ -160,8 +160,8 @@ void tonewheel_osc_fill(tonewheel_osc *osc, int16_t *vibrato_block, int16_t *raw
         for (size_t j = 0; j < block_len; j++) {
             phase += phase_incr;
             // isin_S4 is Q12; volume is Q18
-            vibrato_block[j] = (uint64_t)(isin_S4(phase) * vibrato_volume) >> 15;
-            raw_block[j] = (uint64_t)(isin_S4(phase) * raw_volume) >> 15;
+            vibrato_block[j] += (uint64_t)(isin_S4(phase) * vibrato_volume) >> 15;
+            raw_block[j] += (uint64_t)(isin_S4(phase) * raw_volume) >> 15;
         }
         osc->phases[i] = phase;
     }
