@@ -15,6 +15,8 @@
 // voltage from each tonewheel.
 
 #define MAX_TONEWHEEL_VOLUME (1U << 14)
+#define GAIN_FACTOR (4)
+#define GAIN_THRESHOLD (1U << 10)
 
 // resistance & friends return the resistance of the wire (in ohms)
 // connected to the tonewheel for key + drawbar.
@@ -197,6 +199,8 @@ static const uint32_t draw_gain_q19[9] = {
 // drawbars[8]: 1 1/3' (19th)
 // drawbars[9]: 1' (22nd)
 void manual_fill_volumes(uint64_t keys, uint8_t drawbars[10], uint32_t ret[92]) {
+    uint64_t total_volume = 0;
+
     for (int k = 0; k < 61; k++) {
         if (!(keys & (1ULL << k))) {
             continue;
@@ -211,10 +215,21 @@ void manual_fill_volumes(uint64_t keys, uint8_t drawbars[10], uint32_t ret[92]) 
             int t = tonewheel(k + 1, d); // map key+drawbar to tonewheel index
 
             // prevent overflow
-            ret[t] += draw_gain_q19[level];
-            if (ret[t] > (MAX_TONEWHEEL_VOLUME)) {
-                ret[t] = MAX_TONEWHEEL_VOLUME;
-            }
+            uint32_t gain = draw_gain_q19[level];
+            ret[t] += gain;
+            total_volume += gain;
+        }
+    }
+
+    // normalise the gain amaount based off a a fixed `GAIN_FACTOR` up until a
+    // threshold gain `GAIN_THRESHOLD`, then unity gain
+    uint8_t gain = total_volume < GAIN_THRESHOLD ? GAIN_FACTOR : 1;
+
+    // normalise and limit
+    for (int t = 0; t < 92; t++) {
+        ret[t] = ret[t] * gain;
+        if (ret[t] > (MAX_TONEWHEEL_VOLUME)) {
+            ret[t] = MAX_TONEWHEEL_VOLUME;
         }
     }
     return;

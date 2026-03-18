@@ -107,7 +107,6 @@ void update_tonewheels() {
 
     // Percussion only functions for the upper keybed
     manual_fill_volumes(upperKeybed->keybed_state, Organ::percussion_drawbars, Organ::percussion_volumes);
-    DEBUG_PRINTLN(upperKeybed->keybed_state);
     percussion.setVolumes(Organ::percussion_volumes);
 
     manual_fill_volumes(upperKeybed->keybed_state, drawbars->upper.data(), Organ::upper_tonewheel_volumes);
@@ -298,6 +297,7 @@ void setup() {
 
     tonewheels.init();
     percussion.init();
+    percussionEnv.noteOff();
     vibrato.init();
 
     swell.gain(1.0);
@@ -330,7 +330,7 @@ void loop() {
 
     // Dump debug messages every 500000 loop iterations
     if ((count++ % 500000) == 0) {
-        // DEBUG_status();
-        // DEBUG_statusVolume();
+        DEBUG_status();
+        DEBUG_statusVolume();
     }
 }
