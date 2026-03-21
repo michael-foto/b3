@@ -47,6 +47,8 @@
 #define LESLIE_SPEED_OUT_PIN (19)
 #define LESLIE_STOP_OUT_PIN (20)
 
+#define SWELL_PIN (A3)
+
 namespace Organ {
 
 enum class Speed {
@@ -105,6 +107,7 @@ boolean keybed_initialised = false;
 Vibrato current_vibrato_state = {VibratoMode::C1, false, false};
 Percussion current_percussion_state = {};
 Leslie current_leslie_state = {Speed::Slow, true};
+float current_swell_state = 0;
 
 uint32_t upper_tonewheel_volumes[92] = {0};
 uint32_t lower_tonewheel_volumes[92] = {0};
@@ -156,6 +159,10 @@ void vibrato_init() {
     pinMode(VIBRATO_SELECT_PIN, INPUT);
     pinMode(VIBRATO_UPPER_PIN, INPUT_PULLUP);
     pinMode(VIBRATO_LOWER_PIN, INPUT_PULLUP);
+}
+
+void swell_init() {
+    pinMode(SWELL_PIN, INPUT);
 }
 
 /**
@@ -293,6 +300,11 @@ void read_leslie() {
 
     current_leslie_state.isStopped = !(fast || slow);
     current_leslie_state.leslieSpeed = fast ? Speed::Fast : Speed::Slow;
+}
+
+void read_swell() {
+    uint8_t swell = analogRead(SWELL_PIN) >> 3; // 0 - 128 represent 0.0 - 1.0. Remove digits to reduce analog noise
+    current_swell_state = ((float)swell) / 128.0F;
 }
 
 void write_leslie_output() {

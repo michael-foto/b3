@@ -12,6 +12,7 @@
 #include "manual.h"
 #include "percussion.h"
 #include "vibrato_system.h"
+#include "swell.h"
 
 #include "monitor_audio.h"
 #include "tonewheel_osc_audio.h"
@@ -63,6 +64,7 @@ Drawbars *drawbars;
 Percussion *percussion_system;
 VibratoSystem *vibrato_system;
 Leslie *leslie;
+Swell *swell_system;
 
 // TODO later: add MIDI out via USB
 // MIDI key values
@@ -194,6 +196,10 @@ void handle_note_off(uint8_t keybed_idx, uint8_t key) {
     }
 }
 
+void handle_swell_change() {
+    swell.gain(swell_system->volume);
+}
+
 #pragma region DEBUG
 void DEBUG_showKeys() {
     Serial.print("upper keys :: ");
@@ -294,6 +300,10 @@ void setup() {
     leslie = new Leslie();
     leslie->set_on_leslie_change(Organ::write_leslie_output);
     systems.push_back(leslie);
+
+    swell_system = new Swell();
+    swell_system->set_on_swell_change(handle_swell_change);
+    systems.push_back(swell_system);
 
     tonewheels.init();
     percussion.init();
